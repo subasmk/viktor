@@ -13,5 +13,5 @@ contextBridge.exposeInMainWorld('companion', {
   setState: (s) => ipcRenderer.invoke('set-state', s),
   quit: () => ipcRenderer.invoke('quit'),
   onChunk: (fn) => { const h = (_e, d) => fn(d); ipcRenderer.on('hermes-chunk', h); return () => ipcRenderer.removeListener('hermes-chunk', h); },
-  onState: (fn) => { const h = (_e, s) => fn(s); ipcRenderer.on('companion-state', h); return () => ipcRenderer.removeListener('companion-state', h); },
+  onState: (fn) => { const h = (_e, s, reply) => fn(s, reply); ipcRenderer.on('companion-state', h); return () => ipcRenderer.removeListener('companion-state', h); },
 });

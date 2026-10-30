@@ -42,16 +42,20 @@ function saveConfig(c) {
 
 function createOverlay() {
   overlayWin = new BrowserWindow({
-    width: 180, height: 220,
+    width: 380, height: 220,   // room for the comic speech bubble beside the cat
     transparent: true, frame: false, resizable: false, hasShadow: false,
     alwaysOnTop: config.overlayAlwaysOnTop, skipTaskbar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true },
   });
   overlayWin.setMenu(null);
-  if (config.overlayPos) overlayWin.setPosition(config.overlayPos.x, config.overlayPos.y);
-  else {
-    const d = screen.getPrimaryDisplay().workAreaSize;
-    overlayWin.setPosition(d.width - 220, d.height - 260);
+  const d = screen.getPrimaryDisplay().workAreaSize;
+  if (config.overlayPos) {
+    // keep the (now wider) window fully on screen even with an old saved position
+    const x = Math.max(0, Math.min(config.overlayPos.x, d.width - 380));
+    const y = Math.max(0, Math.min(config.overlayPos.y, d.height - 220));
+    overlayWin.setPosition(x, y);
+  } else {
+    overlayWin.setPosition(d.width - 400, d.height - 260);
   }
   overlayWin.loadFile('overlay.html');
   let moveSaveTimer = null;
@@ -86,9 +90,9 @@ function createConsole() {
   });
 }
 
-function broadcastState(state) {
-  if (overlayWin) overlayWin.webContents.send('companion-state', state);
-  if (consoleWin) consoleWin.webContents.send('companion-state', state);
+function broadcastState(state, reply) {
+  if (overlayWin) overlayWin.webContents.send('companion-state', state, reply || '');
+  if (consoleWin) consoleWin.webContents.send('companion-state', state, reply || '');
 }
 
 // ---- Voice watcher bridge -------------------------------------------------
@@ -189,12 +193,12 @@ function toggleVoice() {
 function watchVoiceState() {
   let last = '';
   const read = () => {
-    let s = 'off';
-    try { s = JSON.parse(fs.readFileSync(VOICE_STATE_PATH(), 'utf8')).state || 'off'; } catch { return; }
+    let s = 'off', j = {};
+    try { j = JSON.parse(fs.readFileSync(VOICE_STATE_PATH(), 'utf8')); s = j.state || 'off'; } catch { return; }
     if (s === last) return;
     last = s; voiceState = s;
     const mapped = VOICE_OVERLAY_MAP[s];
-    if (mapped) broadcastState(mapped);
+    if (mapped) broadcastState(mapped, j.reply || '');
   };
   try {
     fs.watch(DATA_DIR(), (_e, f) => { if (f === 'voice-state.json') setTimeout(read, 50); });

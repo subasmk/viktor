@@ -2,8 +2,14 @@
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'"><link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{background:transparent;overflow:hidden;width:180px;height:220px}
-  body{display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;-webkit-app-region:drag;user-select:none}
+  html,body{background:transparent;overflow:hidden;width:380px;height:220px}
+  body{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;font-family:'JetBrains Mono',monospace;-webkit-app-region:drag;user-select:none}
+  #catCol{display:flex;flex-direction:column;align-items:center;justify-content:center;width:180px;height:220px;flex:none}
+  #bubbleWrap{position:relative;margin-right:12px;margin-bottom:46px;max-width:190px;background:#fff;border:3px solid #241239;border-radius:14px;padding:9px 12px;opacity:0;transform:scale(.7);transform-origin:bottom right;transition:opacity .18s ease-out,transform .18s cubic-bezier(.34,1.56,.64,1);-webkit-app-region:no-drag}
+  #bubbleWrap.show{opacity:1;transform:scale(1)}
+  #bubble{color:#241239;font-family:'Pixelify Sans';font-size:13px;line-height:1.25;word-wrap:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  #bubbleWrap::after{content:'';position:absolute;right:-16px;top:calc(50% - 8px);border:8px solid transparent;border-left:8px solid #241239}
+  #bubbleWrap::before{content:'';position:absolute;right:-9px;top:calc(50% - 5px);border:5px solid transparent;border-left:5px solid #fff;z-index:1}
   #sprite{filter:drop-shadow(0 0 16px rgba(147,51,234,.55));-webkit-app-region:no-drag;cursor:pointer;animation:bob 6s ease-in-out infinite}
   #sprite.listening{filter:drop-shadow(0 0 26px rgba(176,92,255,.95));animation:bob 2.2s ease-in-out infinite}
   #sprite.speaking{filter:drop-shadow(0 0 26px rgba(176,92,255,.95));animation:bob 1.6s ease-in-out infinite}
@@ -18,9 +24,12 @@
   body:hover #hint{opacity:1}
 </style></head>
 <body>
-  <canvas id="sprite" width="120" height="120" title="Click: console · Drag: move · Right-click: menu"></canvas>
-  <div id="state">starting…</div>
-  <div id="hint">click = console · drag = move</div>
+  <div id="bubbleWrap"><div id="bubble"></div></div>
+  <div id="catCol">
+    <canvas id="sprite" width="120" height="120" title="Click: talk · Drag: move · Right-click: menu"></canvas>
+    <div id="state">starting…</div>
+    <div id="hint">click = talk · drag = move</div>
+  </div>
   <script src="mascot.js"></script>
   <script src="overlay.js"></script>
 </body></html>

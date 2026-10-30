@@ -265,6 +265,7 @@ class VoiceWorker(threading.Thread):
             self.log('VIKTOR: "' + reply[:200] + '"')
 
             if self.cfg["speakReplies"] and reply and self.enabled.is_set():
+                self.on_status.reply = reply
                 self.on_status("speak")
                 try:
                     self._speak(reply)
@@ -350,9 +351,12 @@ def _write_state(state_path):
         try:
             state_path.parent.mkdir(parents=True, exist_ok=True)
             eng = getattr(on_status, "engine", None)
+            reply = getattr(on_status, "reply", None)
             payload = {"state": s, "updated": time.time()}
             if eng: payload["engine"] = eng
+            if reply: payload["reply"] = reply[:500]
             state_path.write_text(json.dumps(payload), encoding="utf-8")
+            on_status.reply = None
         except Exception:
             pass
     return on_status

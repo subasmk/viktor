@@ -8,11 +8,15 @@
     idle: 'online', listening: 'listening…', speaking: 'speaking…',
     working: 'working…', happy: 'done ✓', sleepy: 'hermes offline',
   };
-  function apply(s) {
+  const bubble = document.getElementById('bubble');
+  const bubbleWrap = document.getElementById('bubbleWrap');
+  function apply(s, reply) {
     mascot.setState(s);
     canvas.className = s;
     stateEl.textContent = LABELS[s] || s;
     stateEl.style.color = s === 'sleepy' ? '#ff8b8b' : '#cfc3e8';
+    if (s === 'speaking' && reply) { bubble.textContent = reply; bubbleWrap.classList.add('show'); }
+    else if (s !== 'happy') bubbleWrap.classList.remove('show');  // keep the reply up through the happy beat
   }
   apply('idle');
 
@@ -22,14 +26,15 @@
     catch { apply('sleepy'); }
   }
   let current = 'idle';
-  let happyT = null;
-  if (api) { api.onState((s) => {
+  let happyT = null, lastReply = '';
+  if (api) { api.onState((s, reply) => {
     const prev = current; current = s;
     if (prev === 'speaking' && s === 'idle') {
-      apply('happy');  // finished talking -> happy bounce, then settle
+      apply('happy', lastReply);  // finished talking -> happy bounce, bubble stays, then settle
       clearTimeout(happyT);
-      happyT = setTimeout(() => { if (current === 'idle') apply('idle'); }, 2400);
-    } else apply(s);
+      happyT = setTimeout(() => { if (current === 'idle') apply('idle'); }, 2600);
+    } else apply(s, reply);
+    if (s === 'speaking' && reply) lastReply = reply;
   }); health(); setInterval(health, 30000); }
 
   // click vs drag

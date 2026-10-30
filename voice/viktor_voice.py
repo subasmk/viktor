@@ -89,6 +89,7 @@ class VoiceWorker(threading.Thread):
         self.audio_source = audio_source   # test hook: yields int16 frames instead of mic
         self.speaker = speaker             # test hook: callable(text) instead of pyttsx3
         self._cb_speaker = None          # lazy Chatterbox speaker (None=untried, False=unavailable)
+        self.engine = 'off'                # visible: which voice engine actually spoke
         self._whisper = None
         self._q = queue.Queue()
         self.skip_wake_once = False   # set when mic opened manually: next utterance is the command
@@ -142,22 +143,40 @@ class VoiceWorker(threading.Thread):
             raise RuntimeError("HTTP %s - %s" % (r.status_code, r.text[:200]))
         return (r.json().get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
 
+    def _set_engine(self, name, error=None):
+        self.engine = name
+        if hasattr(self.on_status, "__self__") or callable(self.on_status):
+            try: setattr(self.on_status, "engine", name)
+            except Exception: pass
+        self.log(f"voice engine: {name}" + (f" (reason: {error})" if error else ""))
+
     def _speak(self, text):
         if self.speaker is not None:
             self.speaker(text); return
-        if self._cb_speaker is None:
+        pref = self.cfg.get("voiceEngine", "auto")   # auto | chatterbox | basic
+        if pref != "basic" and self._cb_speaker is None:
             try:
                 import chatterbox_speaker
                 self._cb_speaker = chatterbox_speaker.make_speaker(self.log) or False
             except Exception as e:
-                self.log(f"voice: chatterbox speaker init failed ({e}); using pyttsx3")
+                self.log(f"voice: chatterbox speaker init failed ({e})")
                 self._cb_speaker = False
+            if pref == "chatterbox" and not self._cb_speaker:
+                self._set_engine("error", "chatterbox unavailable; voiceEngine=chatterbox blocks fallback")
+                return
         if self._cb_speaker:
             try:
+                self._set_engine("chatterbox")
                 self._cb_speaker(text); return
             except Exception as e:
-                self.log(f"voice: chatterbox speak failed ({e}); using pyttsx3")
+                self.log(f"voice: chatterbox speak failed ({e})")
+                try: self._cb_speaker.shutdown()
+                except Exception: pass
                 self._cb_speaker = False
+                if pref == "chatterbox":
+                    self._set_engine("error", str(e))
+                    return
+        self._set_engine("basic", "chatterbox unavailable" if pref == "auto" else None)
         import pyttsx3
         eng = pyttsx3.init()
         eng.say(text); eng.runAndWait(); eng.stop()
@@ -265,6 +284,12 @@ class VoiceWorker(threading.Thread):
     def stop(self):
         self.stopped.set()
         self.enabled.clear()
+        if self._cb_speaker:
+            try:
+                self._cb_speaker.shutdown()
+                self.log("voice: chatterbox server released")
+            except Exception:
+                pass
 
 LABELS = {
     "off":    ("MIC OFF", "#666666"),
@@ -324,7 +349,10 @@ def _write_state(state_path):
     def on_status(s):
         try:
             state_path.parent.mkdir(parents=True, exist_ok=True)
-            state_path.write_text(json.dumps({"state": s, "updated": time.time()}), encoding="utf-8")
+            eng = getattr(on_status, "engine", None)
+            payload = {"state": s, "updated": time.time()}
+            if eng: payload["engine"] = eng
+            state_path.write_text(json.dumps(payload), encoding="utf-8")
         except Exception:
             pass
     return on_status

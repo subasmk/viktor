@@ -1,7 +1,5 @@
-openwakeword
-onnxruntime
-sounddevice
 faster-whisper
+sounddevice
 pyttsx3
 numpy
 requests

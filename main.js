@@ -8,6 +8,7 @@ const DEFAULTS = {
   endpoint: 'http://127.0.0.1:8642/v1',
   apiKey: '',
   sessionKey: 'desktop-console',
+  modelName: 'hermes-agent',
   appName: 'VIKTOR',
   speakReplies: true,
   ttsVoice: '',
@@ -86,7 +87,7 @@ ipcMain.handle('hermes-chat', async (event, messages) => {
       'Content-Type': 'application/json',
       'X-Hermes-Session-Key': config.sessionKey,
     },
-    body: JSON.stringify({ model: 'hermes-agent', messages, stream: true }),
+    body: JSON.stringify({ model: config.modelName || 'hermes-agent', messages, stream: true }),
   });
   if (!res.ok || !res.body) {
     const txt = await res.text().catch(() => '');
@@ -106,7 +107,7 @@ ipcMain.handle('hermes-chat', async (event, messages) => {
       const t = line.trim();
       if (!t.startsWith('data:')) continue;
       const payload = t.slice(5).trim();
-      if (payload === '[DONE]') { wc.send('hermes-chunk', { done: true }); continue; }
+      if (payload === '[DONE]') { wc.send('hermes-chunk', { done: true }); return; }
       try {
         const j = JSON.parse(payload);
         const delta = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
@@ -124,10 +125,14 @@ ipcMain.handle('hermes-chat', async (event, messages) => {
 ipcMain.handle('detect-hermes', () => {
   const out = { hermesHome: false, envPresent: false, path: '' };
   try {
-    const home = path.join(process.env.LOCALAPPDATA || '', 'hermes');
-    out.path = home;
-    out.hermesHome = fs.existsSync(home);
-    out.envPresent = fs.existsSync(path.join(home, '.env'));
+    const candidates = [];
+    if (process.env.LOCALAPPDATA) candidates.push(path.join(process.env.LOCALAPPDATA, 'hermes'));
+    if (process.env.USERPROFILE) candidates.push(path.join(process.env.USERPROFILE, 'hermes'));
+    candidates.push('D:\\hermes', 'C:\\hermes');
+    const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+    out.hermesHome = !!found;
+    out.path = found || candidates[0] || '';
+    out.envPresent = found ? fs.existsSync(path.join(found, '.env')) : false;
   } catch {}
   return out;
 });

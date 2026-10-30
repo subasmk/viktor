@@ -148,10 +148,14 @@
     if (level === 'off') return;
     const items = api.scoutNews ? await api.scoutNews().catch(() => []) : [];
     if (!items || !items.length) return;
+    // Freshness gate: only offer news published in the last 36 hours; RSS
+    // items with an unparseable date are skipped rather than offered stale.
+    const fresh = items.filter((it) => it.when && Date.now() - it.when < 36 * 3600 * 1000);
+    if (!fresh.length) return;
     let notes = [];
     try { notes = JSON.parse(localStorage.getItem('companion.notes')) || []; } catch {}
     const kws = notes.join(' ').toLowerCase().split(/\W+/).filter((w) => w.length > 3);
-    const scored = items.map((it) => {
+    const scored = fresh.map((it) => {
       const t = it.title.toLowerCase();
       let s = 0;
       kws.forEach((k) => { if (t.includes(k)) s += 2; });

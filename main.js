@@ -146,8 +146,22 @@ ipcMain.handle('open-console', () => createConsole());
 ipcMain.handle('set-state', (_e, s) => { broadcastState(s); });
 ipcMain.handle('quit', () => app.quit());
 
+// External tools (e.g. setup-hermes-api.ps1) may write config.json while the app
+// runs; reload it so the new key is used instead of being overwritten by a later save.
+let configReloadTimer = null;
+function watchConfigFile() {
+  try {
+    fs.watch(app.getPath('userData'), (_evt, filename) => {
+      if (filename !== 'config.json') return;
+      clearTimeout(configReloadTimer);
+      configReloadTimer = setTimeout(() => { loadConfig(); }, 300);
+    });
+  } catch { /* watch unsupported: a restart still picks up external edits */ }
+}
+
 app.whenReady().then(() => {
   loadConfig();
+  watchConfigFile();
   createOverlay();               // overlay mascot only, per design
   globalShortcut.register('Control+B', () => {
     if (consoleWin && consoleWin.isVisible()) consoleWin.hide();

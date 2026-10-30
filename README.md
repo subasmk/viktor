@@ -34,7 +34,7 @@ If your assistant is a different "Hermes", just point the endpoint at any OpenAI
 
 ## Voice
 
-- **Hands-free (wake word):** see `voice/` - a fully local watcher (openWakeWord + faster-whisper + Windows voices). Say the wake phrase, speak your command, it stops listening by itself when you go quiet, sends it to Hermes and speaks the reply. Mic is only open while its control window says so; press Stop or close it and the mic is off. Run: `voice\start-voice.bat`. Default wake model is the pre-trained "hey jarvis"; a custom "hey viktor" can be trained later.
+- **Hands-free ("Hey Viktor"):** see `voice/` - a fully local watcher (faster-whisper + Windows voices, no cloud, no signups). Say "Hey Viktor" and your command - one breath ("Hey Viktor, what time is it") or two ("Hey Viktor." ... "what time is it"). It stops recording by itself when you go quiet, sends the command to your Hermes and speaks the reply. The control window starts with the mic OFF; press Start to listen, Stop or close to shut the mic off. While it speaks, it ignores the mic so it can't hear itself. It reads the same settings as this app - the API key is entered once, in SETTINGS. Run: `pip install -r voice\requirements.txt` (Python 3.10-3.12), then `voice\start-voice.bat`.
 - **Mic input (push-to-talk):** your OpenWhispr hotkey types straight into the command bar (works everywhere on Windows).
 - **Spoken replies:** on by default, uses Windows voices (offline). Pick a voice in SETTINGS. Say/type "stop" or hit STOP to cut it off.
 

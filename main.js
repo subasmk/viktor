@@ -316,6 +316,30 @@ ipcMain.handle('open-external', async (_e, url) => {
   } catch { return false; }
 });
 
+// Proactive scout: bounded public-news fetch. No agent, no tools, no LLM -
+// just two public Google News RSS queries; the overlay scores and words the offer.
+ipcMain.handle('scout-news', async () => {
+  const feeds = [
+    'https://news.google.com/rss/search?q=GTA%206%20OR%20Rockstar%20Games&hl=en-US&gl=US&ceid=US:en',
+    'https://news.google.com/rss/search?q=AI%20announcement%20OR%20big%20tech%20launch&hl=en-US&gl=US&ceid=US:en',
+  ];
+  const items = [];
+  const de = (s) => s.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+  for (const f of feeds) {
+    try {
+      const res = await net.fetch(f);
+      const xml = await res.text();
+      for (const it of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+        const t = (it[1].match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '';
+        const l = (it[1].match(/<link>([\s\S]*?)<\/link>/) || [])[1] || '';
+        const d = (it[1].match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || '';
+        if (t && l) items.push({ title: de(t).slice(0, 200), url: l.trim(), when: Date.parse(d) || 0 });
+      }
+    } catch {}
+  }
+  return items.slice(0, 10);
+});
+
 // Mascot walk: glide the overlay window sideways (idle antics). The debounced
 // 'moved' save persists wherever the walk ends - the new spot becomes home.
 let walking = false;

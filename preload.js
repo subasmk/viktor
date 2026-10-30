@@ -3,6 +3,7 @@ contextBridge.exposeInMainWorld('companion', {
   chat: (messages, sessionKey) => ipcRenderer.invoke('hermes-chat', messages, sessionKey),
   walk: (dx) => ipcRenderer.invoke('overlay-walk', dx),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  scoutNews: () => ipcRenderer.invoke('scout-news'),
   cancel: () => ipcRenderer.invoke('hermes-cancel'),
   models: () => ipcRenderer.invoke('hermes-models'),
   detectHermes: () => ipcRenderer.invoke('detect-hermes'),

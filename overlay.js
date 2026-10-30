@@ -137,62 +137,41 @@
   // Proactive scout: Viktor checks the news itself and offers to act
   // ("GTA 6 trailer dropped - click me and I'll open it"). Clicking the
   // bubble is the yes; nothing opens on its own.
-  let pendingSuggestion = '';
-  let collecting = null;   // {buf} while one of OUR chat streams is running
-  if (api && api.onChunk) api.onChunk((c) => {
-    if (!collecting) return;
-    if (c.delta) collecting.buf += c.delta;
-    if (c.done || c.failed) { const done = collecting; collecting = null; done.finish && done.finish(done.buf); }
-  });
-
-  function chatOnce(messages, sessionKey) {
-    return new Promise((resolve) => {
-      collecting = { buf: '', finish: resolve };
-      api.chat(messages, sessionKey).catch(() => { if (collecting) { collecting = null; } resolve(''); });
-      setTimeout(() => { if (collecting) { const b = collecting.buf; collecting = null; resolve(b); } }, 90000);
-    });
-  }
+  let pendingSuggestion = null;   // {text, url, host} from the bounded news scout
 
   async function scoutTick() {
     setTimeout(scoutTick, 50 * 60 * 1000);
-    if (!api || !hermesOk || current !== 'idle' || pendingSuggestion) return;
+    if (!api || current !== 'idle' || pendingSuggestion) return;
     const cfg = await getCfg();
     if (cfg.proactive === false) return;
     const level = cfg.personality || 'off';
     if (level === 'off') return;
+    const items = api.scoutNews ? await api.scoutNews().catch(() => []) : [];
+    if (!items || !items.length) return;
     let notes = [];
     try { notes = JSON.parse(localStorage.getItem('companion.notes')) || []; } catch {}
-    const persona = window.CompanionPersona && CompanionPersona.promptFor(level);
-    const messages = [];
-    if (persona) messages.push({ role: 'system', content: persona });
-    messages.push({ role: 'system', content:
-      "You are VIKTOR's proactive scout. Use your web tools to check today's news for: GTA / Rockstar games, major AI announcements, and big tech or product launches." +
-      (notes.length ? ' The user also cares about: ' + notes.slice(0, 5).join('; ') + '.' : '') +
-      " If you find ONE thing worth sharing, reply with EXACTLY one line in one of these two forms:" +
-      " INFO: <one short in-character line, max 22 words, just sharing the news>" +
-      " OFFER: <one short in-character line, max 22 words, offering to open the page> | <the exact https URL to open>" +
-      " Never offer anything except opening that one link - no settings, installs, downloads, file changes or messages." +
-      " If nothing is genuinely notable, reply with exactly: NOTHING. No preamble, no markdown, one line only." });
-    messages.push({ role: 'user', content: 'Do your proactive check now.' });
-    const raw = (await chatOnce(messages, 'viktor-proactive')).trim();
-    if (!raw || /^NOTHING\b/i.test(raw)) return;
-    if (raw.includes('\n') || raw.length > 260) return;   // one short visible offer only
-    let parsed = null;
-    let mm = raw.match(/^OFFER:\s*(.+?)\s*\|\s*(https:\/\/\S+)\s*$/i);
-    if (mm) {
-      let u = null;
-      try { u = new URL(mm[2]); } catch {}
-      if (u && u.protocol === 'https:' && !u.username && !u.password && !/[\x00-\x1f\x7f]/.test(mm[2])) {
-        parsed = { text: mm[1].slice(0, 180), url: u.toString(), host: u.hostname };
-      }
-    } else { mm = raw.match(/^INFO:\s*(.+)$/i); if (mm) parsed = { text: mm[1].slice(0, 180), url: '', host: '' }; }
-    if (!parsed) return;
-    bubble.textContent = parsed.text;
-    bubbleDest.textContent = parsed.host ? 'opens ' + parsed.host + ' - nothing else runs' : '';
+    const kws = notes.join(' ').toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+    const scored = items.map((it) => {
+      const t = it.title.toLowerCase();
+      let s = 0;
+      kws.forEach((k) => { if (t.includes(k)) s += 2; });
+      if (/gta|rockstar|openai|gemini|claude|anthropic|launch|release|trailer|announce/.test(t)) s += 1;
+      return { it, s };
+    }).sort((a, b) => b.s - a.s || b.it.when - a.it.when);
+    const top = scored[0].it;
+    let u = null;
+    try { u = new URL(top.url); } catch {}
+    if (!u || u.protocol !== 'https:' || u.username || u.password) return;
+    if (localStorage.getItem('companion.lastScoutUrl') === u.toString()) return;
+    localStorage.setItem('companion.lastScoutUrl', u.toString());
+    const title = top.title.length > 110 ? top.title.slice(0, 107) + '…' : top.title;
+    pendingSuggestion = { text: title + " - click me and I'll open it.", url: u.toString(), host: u.hostname };
+    bubble.textContent = pendingSuggestion.text;
+    bubbleDest.textContent = 'opens ' + u.hostname + ' - nothing else runs';
     bubbleWrap.classList.add('show');
     mascot.setState('happy');
     setTimeout(() => { if (current === 'idle' && !pose) mascot.setState('idle'); }, 2000);
-    setTimeout(() => { if (pendingSuggestion === parsed) { pendingSuggestion = null; hideBubble(); } }, 120000);
+    setTimeout(() => { if (pendingSuggestion && pendingSuggestion.url === u.toString()) { pendingSuggestion = null; hideBubble(); } }, 120000);
   }
   setTimeout(scoutTick, 180000);
 

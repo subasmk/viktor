@@ -46,6 +46,10 @@ cd /d %~dp0
 npm start
 ```
 
+## Dexter mode (opt-in, OFF by default)
+
+In SETTINGS you can give the mascot a personality (`mild` / `cheeky`) and switch on proactive mode. With proactive on, the mascot occasionally checks public tech/gaming news (two fixed Google News RSS queries, fetched and parsed locally - no agent, no tools, no LLM involved) and may offer a link. The bubble always shows the exact hostname it will open; a click only ever opens that one verified https URL in your browser - nothing else runs. Both settings default to OFF.
+
 ## Notes
 
 - The console conversation is a separate Hermes session (`X-Hermes-Session-Key: desktop-console`) - your Telegram chats are untouched.

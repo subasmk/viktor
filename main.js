@@ -14,6 +14,8 @@ const DEFAULTS = {
   modelName: 'hermes-agent',
   appName: 'VIKTOR',
   speakReplies: true,
+  personality: 'off',      // persona + proactive scout are explicit opt-in (SETTINGS)
+  proactive: false,
   ttsVoice: '',
   overlayAlwaysOnTop: true,
   overlayPos: null,
@@ -219,7 +221,7 @@ ipcMain.handle('hermes-cancel', (event) => {
   if (c) c.abort();
 });
 
-ipcMain.handle('hermes-chat', async (event, messages) => {
+ipcMain.handle('hermes-chat', async (event, messages, sessionOverride) => {
   const url = config.endpoint.replace(/\/$/, '') + '/chat/completions';
   const abort = new AbortController();
   chatAborts.set(event.sender.id, abort);
@@ -231,7 +233,7 @@ ipcMain.handle('hermes-chat', async (event, messages) => {
       headers: {
         Authorization: 'Bearer ' + config.apiKey,
         'Content-Type': 'application/json',
-        'X-Hermes-Session-Key': config.sessionKey,
+        'X-Hermes-Session-Key': sessionOverride || config.sessionKey,
       },
       body: JSON.stringify({ model: config.modelName || 'hermes-agent', messages, stream: true }),
     });
@@ -301,6 +303,29 @@ ipcMain.handle('set-config', (_e, c) => { saveConfig(c); return config; });
 ipcMain.handle('open-console', () => createConsole());
 ipcMain.handle('set-state', (_e, s) => { broadcastState(s); });
 ipcMain.handle('quit', () => app.quit());
+// Mascot walk: glide the overlay window sideways (idle antics). The debounced
+// 'moved' save persists wherever the walk ends - the new spot becomes home.
+let walking = false;
+ipcMain.handle('overlay-walk', async (_e, dx) => {
+  if (!overlayWin || walking || !dx) return false;
+  walking = true;
+  try {
+    const [x, y] = overlayWin.getPosition();
+    const wa = screen.getDisplayMatching(overlayWin.getBounds()).workArea;
+    const target = Math.max(wa.x, Math.min(wa.x + wa.width - 380, x + Math.round(dx)));
+    const step = target > x ? 5 : -5;
+    let cx = x;
+    while (Math.abs(target - cx) > Math.abs(step)) {
+      cx += step;
+      if (!overlayWin) break;
+      overlayWin.setPosition(cx, y);
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    if (overlayWin) overlayWin.setPosition(target, y);
+    return true;
+  } finally { walking = false; }
+});
+
 ipcMain.handle('toggle-voice', () => toggleVoice());
 ipcMain.handle('voice-status', () => ({ state: voiceState, micOn: voiceMicOn(), error: voiceError, running: !!voiceProc }));
 

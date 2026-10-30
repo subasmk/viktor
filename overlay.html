@@ -4,7 +4,8 @@
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{background:transparent;overflow:hidden;width:380px;height:220px}
   body{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;font-family:'JetBrains Mono',monospace;-webkit-app-region:drag;user-select:none}
-  #catCol{display:flex;flex-direction:column;align-items:center;justify-content:center;width:180px;height:220px;flex:none}
+  #catCol{display:flex;flex-direction:column;align-items:center;justify-content:center;width:180px;height:220px;flex:none;transition:transform .7s ease,opacity .7s ease}
+  #catCol.gone{transform:translateX(170px) rotate(10deg);opacity:0}
   #bubbleWrap{position:relative;margin-right:12px;margin-bottom:46px;max-width:190px;background:#fff;border:3px solid #241239;border-radius:14px;padding:9px 12px;opacity:0;transform:scale(.7);transform-origin:bottom right;transition:opacity .18s ease-out,transform .18s cubic-bezier(.34,1.56,.64,1);-webkit-app-region:no-drag}
   #bubbleWrap.show{opacity:1;transform:scale(1)}
   #bubble{color:#241239;font-family:'Pixelify Sans';font-size:13px;line-height:1.25;word-wrap:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
@@ -31,5 +32,6 @@
     <div id="hint">click = talk · drag = move</div>
   </div>
   <script src="mascot.js"></script>
+  <script src="persona.js"></script>
   <script src="overlay.js"></script>
 </body></html>

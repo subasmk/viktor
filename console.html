@@ -95,7 +95,14 @@
       <label>API key (never leaves this laptop)<input id="setKey" type="password" placeholder="API_SERVER_KEY value"></label>
       <label>Session key<input id="setSession" placeholder="desktop-console"></label>
       <label>Reply voice<select id="setVoice"></select></label>
+      <label>Personality (Dexter mode)<select id="setPersonality">
+        <option value="off">Off — plain assistant</option>
+        <option value="chill">Chill — friendly, light humor</option>
+        <option value="cheeky">Cheeky — witty &amp; teasing</option>
+        <option value="roast">Full roast — savage but loyal</option>
+      </select></label>
       <label class="check"><input type="checkbox" id="setSpeak"> Speak replies out loud</label>
+      <label class="check"><input type="checkbox" id="setProactive"> Proactive Viktor — checks the news now and then and suggests things on its own (click its speech bubble to say yes)</label>
       <div class="row-btns">
         <button class="btn" id="setSave">SAVE</button>
         <button class="btn ghost" id="setTest">TEST CONNECTION</button>
@@ -118,6 +125,7 @@
 
 <script src="mascot.js"></script>
 <script src="orb.js"></script>
+<script src="persona.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -26,6 +26,19 @@
   BODY_TWITCH[0] = "..........OO....";
   BODY_TWITCH[1] = ".........OXXO...";
 
+  // Sitting: same cat, folded into a seat with feet out front.
+  const BODY_SIT = BODY.slice();
+  BODY_SIT[11] = "..OXXXXXXXXXXO..";
+  BODY_SIT[12] = ".OXXXXXXXXXXXXO.";
+  BODY_SIT[13] = ".OXXXXXXXXXXXXO.";
+  BODY_SIT[14] = "..OO........OO..";
+
+  // Walking: legs mid-stride (A) and passing (B); the window itself moves.
+  const BODY_WALK_A = BODY.slice();
+  BODY_WALK_A[14] = "..OXXO....OXXO..";
+  const BODY_WALK_B = BODY.slice();
+  BODY_WALK_B[14] = ".....OXXOXXO....";
+
   const EYES = {
     open:      ["..OXGKXXXXKGXO..", "..OXKKXXXXKKXO.."],
     blink:     ["..OXXXXXXXXXXO..", "..OXKKXXXXKKXO.."],
@@ -34,11 +47,17 @@
     lookL:     ["..OGKXXXXKGXXO..", "..OKKXXXXKKXXO.."],
     lookR:     ["..OXXGKXXXXKGO..", "..OXXKKXXXXKKO.."],
     sleepy:    ["..OXXXXXXXXXXO..", "..OXKKXXXXKKXO.."],
+    smug:      ["..OXXXXXXXKGXO..", "..OXXXXXXXKKXO.."],
+    annoyed:   ["..OXXXXXXXXXXO..", "..OXKKXXXXKKXO.."],
   };
   const MOUTH = {
     closed: "..OXXXXKKXXXXO..",
     open:   "..OXXXKKKKXXXO..",
+    flat:   "..OXKKKKKKKKXO..",
   };
+  // Anger vein (annoyed), pulsing two frames.
+  const VEIN_A = [[13, 0], [14, 1], [12, 1], [13, 2]];
+  const VEIN_B = [[13, 0], [14, 0], [13, 1], [12, 1], [14, 2], [13, 2]];
 
   // Accent pixels (grid cells) drawn over/around the body per animation frame.
   const ARCS_A = [[0, 6], [15, 6]];
@@ -50,7 +69,7 @@
   const Z_A = [[12, 0], [13, 0], [14, 0], [13, 1], [12, 2], [13, 2], [14, 2]];
   const Z_B = [[13, 1], [14, 1], [15, 1], [14, 2], [13, 3], [14, 3], [15, 3]];
 
-  const ANIM_MS = { listening: 450, working: 520, speaking: 180, happy: 300, sleepy: 900 };
+  const ANIM_MS = { listening: 450, working: 520, speaking: 180, happy: 300, sleepy: 900, walk: 170, sleep: 1100, smug: 700, annoyed: 450 };
 
   function drawFrame(canvas, opts) {
     const { eyes, mouth, dim, dy, extras, body } = opts;
@@ -100,7 +119,7 @@
     _scheduleBlink() {
       clearTimeout(this._blinkTimer);
       this._blinkTimer = setTimeout(() => {
-        if (this.state === 'idle' && !this._twitching) {
+        if ((this.state === 'idle' || this.state === 'sit') && !this._twitching) {
           this._eyeOverride = EYES.blink; this.render();
           setTimeout(() => { this._eyeOverride = null; this.render(); }, 160);
         }
@@ -133,6 +152,29 @@
         case 'idle':
           if (this._eyeOverride) eyes = this._eyeOverride;
           if (this._twitching) body = BODY_TWITCH;
+          break;
+        case 'sit':
+          if (this._eyeOverride) eyes = this._eyeOverride;
+          body = BODY_SIT;
+          break;
+        case 'walk':
+          eyes = EYES.lookR;
+          body = f % 2 ? BODY_WALK_A : BODY_WALK_B;
+          dy = f % 2 ? 0 : 1;
+          break;
+        case 'sleep':
+          eyes = EYES.sleepy;
+          dim = true; dy = 3;
+          extras = (f % 2 ? Z_B : Z_A).map(([x, y]) => [x, y, false]);
+          break;
+        case 'smug':
+          eyes = EYES.smug;
+          mouth = f % 2 ? MOUTH.open : MOUTH.closed;
+          break;
+        case 'annoyed':
+          eyes = EYES.annoyed;
+          mouth = MOUTH.flat;
+          extras = (f % 2 ? VEIN_B : VEIN_A).map(([x, y]) => [x, y, true]);
           break;
         case 'listening':
           extras = (f % 2 ? ARCS_B : ARCS_A).map(([x, y]) => [x, y, false]);

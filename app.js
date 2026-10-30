@@ -2,7 +2,7 @@
   const api = window.companion; // preload bridge (absent if opened as a plain file)
   const $ = (id) => document.getElementById(id);
 
-  let config = { endpoint: 'http://127.0.0.1:8642/v1', apiKey: '', sessionKey: 'desktop-console', appName: 'VIKTOR', speakReplies: true, ttsVoice: '' };
+  let config = { endpoint: 'http://127.0.0.1:8642/v1', apiKey: '', sessionKey: 'desktop-console', appName: 'VIKTOR', speakReplies: true, personality: 'off', ttsVoice: '' };
   let live = false;
   let busy = false;
   let generation = 0;
@@ -114,6 +114,8 @@
     setState('working');
     const notes = getNotes();
     const messages = [];
+    const persona = window.CompanionPersona && CompanionPersona.promptFor(config.personality);
+    if (persona) messages.push({ role: 'system', content: persona });
     if (notes.length) messages.push({ role: 'system', content: 'Persistent user notes (device console):\n' + notes.map(n => '- ' + n).join('\n') });
     messages.push({ role: 'user', content: text });
 
@@ -225,6 +227,8 @@
     $('setKey').value = config.apiKey || '';
     $('setSession').value = config.sessionKey || '';
     $('setSpeak').checked = !!config.speakReplies;
+    $('setProactive').checked = config.proactive !== false;
+    $('setPersonality').value = config.personality || 'off';
     populateVoices();
     if (api && api.detectHermes) {
       const d = await api.detectHermes();
@@ -240,6 +244,8 @@
     config.sessionKey = $('setSession').value.trim() || 'desktop-console';
     config.ttsVoice = $('setVoice').value;
     config.speakReplies = $('setSpeak').checked;
+    config.proactive = $('setProactive').checked;
+    config.personality = $('setPersonality').value;
     await saveConfig();
     $('appLogo').textContent = config.appName.toUpperCase();
     $('setStatus').textContent = 'Saved.';
@@ -294,7 +300,7 @@
   // ---------- command bar ----------
   $('micBtn').onclick = () => toggleListen();
   $('cmdInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { sendCommand($('cmdInput').value); $('cmdInput').value = ''; } });
-  $('stopBtn').onclick = () => { generation++; if (api && api.cancel) api.cancel(); speechSynthesis.cancel(); stopListen(); busy = false; setState(live ? 'idle' : 'sleepy'); };
+  $('stopBtn').onclick = () => { generation++; if (api && api.cancel) api.cancel(); speechSynthesis.cancel(); stopListen(); busy = false; setState('annoyed'); setTimeout(() => { if (!busy) setState(live ? 'idle' : 'sleepy'); }, 1600); };
   setInterval(() => $('stopBtn').classList.toggle('hidden', !(busy || speechSynthesis.speaking)), 300);
 
   document.querySelectorAll('.chip').forEach(ch => ch.onclick = () => sendCommand(ch.dataset.cmd));

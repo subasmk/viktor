@@ -1,0 +1,1 @@
+{"groq":{"apiKey":"","base":"https://api.groq.com/openai/v1","model":"llama-3.3-70b-versatile"},"ollama":{"apiKey":"ollama","base":"http://127.0.0.1:11434/v1","model":"llama3.1:8b"},"port":8731,"provider":"groq"}

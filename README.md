@@ -68,3 +68,31 @@ Poses live in `assets/shiba/`; the engine is `mascot-sprite.js` and exposes
 the same `setState()` interface as the pixel mascot.
 
 Prefer the original? Settings -> Mascot -> "Pixel cat" switches back, live.
+
+## Viktor Core — Viktor's own brain (Phase 2)
+
+Viktor normally talks to a local Hermes Agent. **Viktor Core** is a small
+built-in brain that speaks the same OpenAI-style API, so Viktor can run
+standalone — no Hermes required.
+
+**Run it:** double-click `start-core.bat` (needs Node.js), then in Viktor's
+Settings set **Endpoint** to `http://127.0.0.1:8731/v1`. The API key field can
+hold anything; Core ignores it.
+
+**Switchable brain** — open http://127.0.0.1:8731/ in a browser:
+- **Groq** (cloud): fastest replies for voice. Free key at console.groq.com → API Keys, paste it on the settings page.
+- **Ollama** (local): fully offline and private. Install from ollama.com, run `ollama pull llama3.1:8b` once, pick your model on the settings page.
+
+Changes apply to the next message; no restart. Hermes stays available — just
+point the Endpoint back at it (127.0.0.1:8642) whenever you want.
+
+**What Core can do:** a simple agent loop (up to 6 tool rounds per message)
+with tools to open apps and web pages, run shell commands, read/write files,
+list folders, search and fetch the web, send media keys (Windows), and keep
+long-term notes (`remember`/`recall`, stored in `core/data/notes.txt`).
+Conversations persist as JSONL in `core/data/` so a crash loses nothing.
+
+**Safety:** Core listens on 127.0.0.1 only — never the network — because it
+can run commands. A denylist refuses destructive command patterns (formatting,
+recursive system deletes, shutdown, registry deletes). It is still your PC and
+your assistant: review what you ask it to run, the way you would with any agent.

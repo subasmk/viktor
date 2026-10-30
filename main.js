@@ -303,6 +303,17 @@ ipcMain.handle('set-config', (_e, c) => { saveConfig(c); return config; });
 ipcMain.handle('open-console', () => createConsole());
 ipcMain.handle('set-state', (_e, s) => { broadcastState(s); });
 ipcMain.handle('quit', () => app.quit());
+// Scout offers: the ONLY thing a bubble click can execute is opening one
+// verified https URL in the browser. No agent task runs from this path.
+ipcMain.handle('open-external', async (_e, url) => {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'https:') return false;
+    await shell.openExternal(u.toString());
+    return true;
+  } catch { return false; }
+});
+
 // Mascot walk: glide the overlay window sideways (idle antics). The debounced
 // 'moved' save persists wherever the walk ends - the new spot becomes home.
 let walking = false;

@@ -166,38 +166,42 @@
     messages.push({ role: 'system', content:
       "You are VIKTOR's proactive scout. Use your web tools to check today's news for: GTA / Rockstar games, major AI announcements, and big tech or product launches." +
       (notes.length ? ' The user also cares about: ' + notes.slice(0, 5).join('; ') + '.' : '') +
-      " If you find ONE thing the user would plausibly want to act on, reply with exactly ONE short line (max 22 words) in character, suggesting the concrete action and ending with the offer to do it on a click (like: 'GTA 6 trailer just dropped - click me and I'll open it on YouTube.')." +
-      " Only ever offer to OPEN a link or share what you found - never offer to change settings, install or run anything, delete files, or message anyone." +
-      " If nothing is genuinely notable, reply with exactly: NOTHING. No preamble, no list, no markdown." });
+      " If you find ONE thing worth sharing, reply with EXACTLY one line in one of these two forms:" +
+      " INFO: <one short in-character line, max 22 words, just sharing the news>" +
+      " OFFER: <one short in-character line, max 22 words, offering to open the page> | <the exact https URL to open>" +
+      " Never offer anything except opening that one link - no settings, installs, downloads, file changes or messages." +
+      " If nothing is genuinely notable, reply with exactly: NOTHING. No preamble, no markdown, one line only." });
     messages.push({ role: 'user', content: 'Do your proactive check now.' });
-    const text = (await chatOnce(messages, 'viktor-proactive')).trim();
-    if (!text || /^NOTHING\b/i.test(text)) return;
-    if (text.includes('\n') || text.length > 180) return;   // one short visible offer only
-    pendingSuggestion = text;
-    bubble.textContent = text;
+    const raw = (await chatOnce(messages, 'viktor-proactive')).trim();
+    if (!raw || /^NOTHING\b/i.test(raw)) return;
+    if (raw.includes('\n') || raw.length > 260) return;   // one short visible offer only
+    let parsed = null;
+    let mm = raw.match(/^OFFER:\s*(.+?)\s*\|\s*(https:\/\/\S+)\s*$/i);
+    if (mm) parsed = { text: mm[1].slice(0, 180), url: mm[2] };
+    else { mm = raw.match(/^INFO:\s*(.+)$/i); if (mm) parsed = { text: mm[1].slice(0, 180), url: '' }; }
+    if (!parsed) return;
+    bubble.textContent = parsed.text;
     bubbleWrap.classList.add('show');
     mascot.setState('happy');
     setTimeout(() => { if (current === 'idle' && !pose) mascot.setState('idle'); }, 2000);
-    setTimeout(() => { if (pendingSuggestion === text) { pendingSuggestion = ''; bubbleWrap.classList.remove('show'); } }, 120000);
+    setTimeout(() => { if (pendingSuggestion === parsed) { pendingSuggestion = null; bubbleWrap.classList.remove('show'); } }, 120000);
   }
   setTimeout(scoutTick, 180000);
 
   bubbleWrap.style.cursor = 'pointer';
   bubbleWrap.addEventListener('click', async () => {
     if (!pendingSuggestion || !api) return;
-    const suggestion = pendingSuggestion;
-    pendingSuggestion = '';
-    bubble.textContent = 'On it…';
-    mascot.setState('working');
-    const cfg = await getCfg();
-    const persona = window.CompanionPersona && CompanionPersona.promptFor(cfg.personality || 'off');
-    const messages = [];
-    if (persona) messages.push({ role: 'system', content: persona });
-    messages.push({ role: 'system', content: 'The user approved exactly one action, quoted below. Do ONLY that single action - no extra steps, no other tools, no follow-ons. If you cannot do exactly that safely, say so instead.' });
-    messages.push({ role: 'user', content: 'Approved action (do only this): "' + suggestion + '"' });
-    const reply = (await chatOnce(messages)).trim();   // default session: lands in the main history
-    bubble.textContent = reply || 'Done.';
+    const suggestion = pendingSuggestion;   // {text, url} - parsed and validated by the scout
+    pendingSuggestion = null;
+    if (suggestion.url && api.openExternal) {
+      bubble.textContent = 'Opening it…';
+      const ok = await api.openExternal(suggestion.url).catch(() => false);
+      bubble.textContent = ok ? 'Opened!' : 'Could not open that link.';
+    } else {
+      bubbleWrap.classList.remove('show');   // info-only: a click just dismisses
+      return;
+    }
     mascot.setState('happy');
-    setTimeout(() => { bubbleWrap.classList.remove('show'); if (current === 'idle' && !pose) apply('idle'); }, 9000);
+    setTimeout(() => { bubbleWrap.classList.remove('show'); if (current === 'idle' && !pose) apply('idle'); }, 6000);
   });
 })();

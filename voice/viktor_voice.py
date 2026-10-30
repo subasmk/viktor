@@ -2,165 +2,121 @@
 VIKTOR hands-free voice watcher (Windows, fully local, free/open-source only).
 
 Pipeline, all on this laptop:
-  mic -> openWakeWord (wake phrase) -> local recording with silence end-of-speech
-      -> faster-whisper (local Whisper) -> your Hermes API (127.0.0.1:8642/v1)
-      -> reply spoken with Windows voices (pyttsx3 / SAPI, offline).
+  mic -> local voice-activity gate -> faster-whisper (local Whisper) spots the
+  wake phrase "Hey Viktor" -> your Hermes API (127.0.0.1:8642/v1)
+  -> reply spoken with Windows voices (pyttsx3 / SAPI, offline).
+
+No wake model to train: the whisper transcription itself spots the phrase, so the
+real phrase "Hey Viktor" works out of the box. Wake phrase and command can be one
+utterance ("Hey Viktor, what time is it") or two ("Hey Viktor." ... "what time is it").
 
 Privacy model:
-  - The mic is opened ONLY while this watcher is running AND the big Start button
-    in its control window is on. Close the window or press Stop = mic off.
-  - Wake listening, transcription and speaking all run locally. The only network
-    call is the command text to YOUR Hermes at 127.0.0.1 after you say something.
+  - The mic is opened ONLY while this watcher runs AND the Start button in its
+    control window is on. Stop/close the window = mic off.
+  - While listening, short voiced snippets are transcribed locally by whisper.
+    Nothing leaves the laptop except a command text sent to YOUR OWN Hermes at
+    127.0.0.1 after the wake phrase is recognized.
+  - While VIKTOR speaks, incoming audio is discarded so it cannot hear itself.
 
 Setup (one time):
   pip install -r requirements.txt
-  python viktor_voice.py            # first run downloads models (~200 MB), then fill the config it creates
-Config: voice_config.json next to this file (endpoint + your Hermes API_SERVER_KEY; key stays on this laptop).
+  python viktor_voice.py            # first run downloads the whisper model (~145 MB)
+Config: it reads the same settings as the VIKTOR desktop app
+  (%APPDATA%\\viktor\\config.json) - enter your Hermes API_SERVER_KEY once, in the
+  app's SETTINGS. voice_config.json next to this file can override if present.
 
-Wake phrase: default model is the pre-trained "hey jarvis" (no training needed).
-A custom "hey viktor" model can be trained later with openWakeWord's notebook.
-
-Tested: module imports and pipeline logic on Linux (CI-style), not on a real mic
-or Windows audio stack yet - first real-mic run is on the user's laptop.
+Tested: wake spotting, transcription, Hermes request and error paths on Linux
+with synthetic speech (no real mic here). Not yet tested: real microphone,
+the control window on Windows, spoken output on Windows.
 """
-import json, os, queue, sys, threading, time
+import json, queue, re, sys, threading, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CFG_PATH = HERE / "voice_config.json"
+SR = 16000
+CHUNK = 1280  # 80 ms
+
 DEFAULT_CFG = {
     "endpoint": "http://127.0.0.1:8642/v1",
-    "apiKey": "",                       # paste your Hermes API_SERVER_KEY here (min 16 chars)
+    "apiKey": "",
     "sessionKey": "desktop-voice",
     "modelName": "hermes-agent",
-    "wakeModel": "hey_jarvis",          # pre-trained; custom 'hey viktor' can be trained later
-    "wakeThreshold": 0.5,
-    "whisperModel": "base.en",
+    "whisperModel": "base.en",       # tiny.en is faster on weak CPUs, less accurate
     "speakReplies": True,
     "maxRecordSeconds": 12,
     "silenceSeconds": 1.2,
+    "rmsThreshold": 500,             # speech gate for a quiet room; raise if fans trigger it
 }
 
+WAKE_RE = re.compile(r"^(hey|a|hey there|ok|okay)?\s*(viktor|victor|vector)\b[\s,.!?]*", re.IGNORECASE)
+
 def load_cfg():
-    if not CFG_PATH.exists():
-        CFG_PATH.write_text(json.dumps(DEFAULT_CFG, indent=2), encoding="utf-8")
     cfg = dict(DEFAULT_CFG)
+    # 1) shared config from the VIKTOR desktop app (key entered once, in the app)
     try:
-        cfg.update(json.loads(CFG_PATH.read_text(encoding="utf-8")))
+        appdata = Path.home() / "AppData" / "Roaming" / "viktor" / "config.json"
+        if appdata.exists():
+            app_cfg = json.loads(appdata.read_text(encoding="utf-8"))
+            for k in ("endpoint", "apiKey", "sessionKey", "modelName"):
+                if app_cfg.get(k):
+                    cfg[k] = app_cfg[k]
+    except Exception:
+        pass
+    # 2) optional local override next to this file
+    try:
+        local = HERE / "voice_config.json"
+        if local.exists():
+            cfg.update({k: v for k, v in json.loads(local.read_text(encoding="utf-8")).items() if v not in ("", None)})
     except Exception:
         pass
     return cfg
 
-# ---------------- audio pipeline (runs in a worker thread) ----------------
 class VoiceWorker(threading.Thread):
-    def __init__(self, cfg, on_status, on_log):
+    def __init__(self, cfg, on_status, on_log, audio_source=None, speaker=None):
         super().__init__(daemon=True)
         self.cfg = cfg
-        self.on_status = on_status      # 'off' | 'wake' | 'listen' | 'think' | 'speak'
+        self.on_status = on_status    # 'off' | 'wake' | 'listen' | 'think' | 'speak'
         self.on_log = on_log
         self.enabled = threading.Event()
         self.stopped = threading.Event()
+        self.audio_source = audio_source   # test hook: yields int16 frames instead of mic
+        self.speaker = speaker             # test hook: callable(text) instead of pyttsx3
+        self._whisper = None
+        self._q = queue.Queue()
 
-    def log(self, msg):
-        self.on_log(msg)
+    def log(self, m): self.on_log(m)
 
-    def run(self):
-        import numpy as np
+    # -- audio in --
+    def _frames(self):
+        if self.audio_source is not None:
+            yield from self.audio_source()
+            return
         import sounddevice as sd
-        from openwakeword.model import Model as WakeModel
-
-        self.on_status("off"); self.log("Loading wake-word model: " + self.cfg["wakeModel"])
-        try:
-            from openwakeword.utils import download_models
-            download_models([self.cfg["wakeModel"]])  # no-op when already present
-            wake = WakeModel(wakeword_models=[self.cfg["wakeModel"]], inference_framework="onnx")
-        except Exception as e:
-            self.log("Wake model failed to load: " + str(e)); self.on_status("off"); return
-        whisper = None  # lazy-load on first command
-
-        SR = 16000
-        CHUNK = 1280  # 80 ms, openwakeword's expected frame
-        q = queue.Queue()
-
         def cb(indata, frames, t, status):
             if self.enabled.is_set():
-                q.put(indata[:, 0].copy())
-
-        self.log("Mic opens only while Started.")
+                self._q.put(indata[:, 0].copy())
         with sd.InputStream(samplerate=SR, channels=1, dtype="int16", blocksize=CHUNK, callback=cb):
             while not self.stopped.is_set():
-                if not self.enabled.is_set():
-                    self.on_status("off")
-                    time.sleep(0.15)
-                    continue
-                self.on_status("wake")
                 try:
-                    frame = q.get(timeout=0.5)
+                    yield self._q.get(timeout=0.3)
                 except queue.Empty:
-                    continue
-                pred = wake.predict(frame)
-                score = max(pred.values()) if pred else 0.0
-                if score < self.cfg["wakeThreshold"]:
-                    continue
+                    yield None
 
-                # --- wake word heard: record one command with silence end-of-speech ---
-                self.on_status("listen"); self.log("Wake heard (score %.2f) - listening..." % score)
-                buf = [frame]
-                voiced = False
-                silent_for = 0.0
-                t0 = time.time()
-                while time.time() - t0 < self.cfg["maxRecordSeconds"]:
-                    try:
-                        fr = q.get(timeout=0.5)
-                    except queue.Empty:
-                        break
-                    buf.append(fr)
-                    rms = float(np.sqrt(np.mean(fr.astype(np.float32) ** 2)))
-                    if rms > 400:          # crude but effective speech gate for a quiet room
-                        voiced = True
-                        silent_for = 0.0
-                    elif voiced:
-                        silent_for += CHUNK / SR
-                        if silent_for >= self.cfg["silenceSeconds"]:
-                            break           # automatic end-of-speech: no key press needed
-                audio = np.concatenate(buf).astype(np.float32) / 32768.0
-                if not voiced:
-                    self.log("Heard wake but no speech after it."); continue
+    def _drain(self):
+        while not self._q.empty():
+            try: self._q.get_nowait()
+            except queue.Empty: break
 
-                # --- transcribe locally ---
-                self.on_status("think")
-                try:
-                    if whisper is None:
-                        self.log("Loading local Whisper (" + self.cfg["whisperModel"] + "), first time downloads it...")
-                        from faster_whisper import WhisperModel
-                        whisper = WhisperModel(self.cfg["whisperModel"], device="cpu", compute_type="int8")
-                    segments, _ = whisper.transcribe(audio, beam_size=1, language="en")
-                    text = " ".join(s.text for s in segments).strip()
-                except Exception as e:
-                    self.log("Transcription failed: " + str(e)); continue
-                if not text:
-                    self.log("Heard nothing intelligible."); continue
-                self.log('You said: "' + text + '"')
+    # -- whisper --
+    def _transcribe(self, audio_f32):
+        if self._whisper is None:
+            self.log("Loading local Whisper (" + self.cfg["whisperModel"] + "); first run downloads it...")
+            from faster_whisper import WhisperModel
+            self._whisper = WhisperModel(self.cfg["whisperModel"], device="cpu", compute_type="int8")
+        segments, _ = self._whisper.transcribe(audio_f32, beam_size=1, language="en")
+        return " ".join(s.text for s in segments).strip()
 
-                # --- send to Hermes ---
-                try:
-                    reply = self.ask_hermes(text)
-                except Exception as e:
-                    self.log("Hermes request failed: " + str(e)); continue
-                self.log('VIKTOR: "' + reply[:200] + '"')
-
-                # --- speak reply with Windows voices (offline) ---
-                if self.cfg["speakReplies"] and reply:
-                    self.on_status("speak")
-                    try:
-                        import pyttsx3
-                        eng = pyttsx3.init()
-                        eng.say(reply)
-                        eng.runAndWait()
-                        eng.stop()
-                    except Exception as e:
-                        self.log("Speech failed: " + str(e))
-
+    # -- hermes --
     def ask_hermes(self, text):
         import requests
         url = self.cfg["endpoint"].rstrip("/") + "/chat/completions"
@@ -172,23 +128,118 @@ class VoiceWorker(threading.Thread):
             "model": self.cfg["modelName"] or "hermes-agent",
             "messages": [{"role": "user", "content": text}],
             "stream": False,
-        }, timeout=120)
+        }, timeout=60)
         if not r.ok:
             raise RuntimeError("HTTP %s - %s" % (r.status_code, r.text[:200]))
-        data = r.json()
-        return (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+        return (r.json().get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+
+    def _speak(self, text):
+        if self.speaker is not None:
+            self.speaker(text); return
+        import pyttsx3
+        eng = pyttsx3.init()
+        eng.say(text); eng.runAndWait(); eng.stop()
+
+    # -- one utterance from the frame stream --
+    def _collect_utterance(self, frames):
+        import numpy as np
+        buf, voiced, silent_for, t0 = [], False, 0.0, time.time()
+        pre = []  # short pre-roll so the first syllable is not clipped
+        while time.time() - t0 < self.cfg["maxRecordSeconds"] and not self.stopped.is_set():
+            fr = next(frames)
+            if fr is None:
+                if voiced: break
+                continue
+            rms = float(np.sqrt(np.mean(fr.astype(np.float32) ** 2)))
+            if not voiced:
+                pre.append(fr)
+                if len(pre) > 6: pre.pop(0)
+                if rms > self.cfg["rmsThreshold"]:
+                    voiced = True
+                    buf = pre + [fr]
+                    self.on_status("listen")
+            else:
+                buf.append(fr)
+                if rms > self.cfg["rmsThreshold"]:
+                    silent_for = 0.0
+                else:
+                    silent_for += CHUNK / SR
+                    if silent_for >= self.cfg["silenceSeconds"]:
+                        break
+        if not voiced or not self.enabled.is_set():
+            return None
+        return np.concatenate(buf).astype(np.float32) / 32768.0
+
+    def run(self):
+        awaiting_command = False
+        frames = self._frames()
+        self.on_status("off")
+        self.log("Ready. Mic opens only while Started.")
+        while not self.stopped.is_set():
+            if not self.enabled.is_set():
+                self.on_status("off")
+                self._drain()
+                time.sleep(0.15)
+                continue
+            self.on_status("wake" if not awaiting_command else "listen")
+            audio = self._collect_utterance(frames)
+            if audio is None:
+                continue
+            self.on_status("think")
+            try:
+                text = self._transcribe(audio)
+            except Exception as e:
+                self.log("Transcription failed: " + str(e)); continue
+            if not text:
+                continue
+            self.log('Heard: "' + text + '"')
+
+            m = WAKE_RE.match(text)
+            if m:
+                awaiting_command = True
+                command = text[m.end():].strip()
+            elif awaiting_command:
+                command = text
+            else:
+                continue  # not for us; keep listening
+
+            awaiting_command = False
+            if not command:
+                self.on_status("listen")
+                self.log("Yes? Say your command.")
+                awaiting_command = True
+                continue
+            self.log('Command: "' + command + '" -> Hermes')
+
+            if not self.enabled.is_set():
+                continue
+            try:
+                reply = self.ask_hermes(command)
+            except Exception as e:
+                self.log("Hermes request failed: " + str(e)); continue
+            self.log('VIKTOR: "' + reply[:200] + '"')
+
+            if self.cfg["speakReplies"] and reply and self.enabled.is_set():
+                self.on_status("speak")
+                try:
+                    self._speak(reply)
+                except Exception as e:
+                    self.log("Speech failed: " + str(e))
+                self._drain()  # discard anything the mic heard while speaking
 
     def set_enabled(self, on):
-        self.enabled.set() if on else self.enabled.clear()
+        if on: self.enabled.set()
+        else:
+            self.enabled.clear()
+            self._drain()
 
     def stop(self):
         self.stopped.set()
         self.enabled.clear()
 
-# ---------------- control window (visible indicator + off control) ----------------
 LABELS = {
     "off":    ("MIC OFF", "#666666"),
-    "wake":   ("LISTENING for wake phrase", "#b05cff"),
+    "wake":   ("LISTENING for 'Hey Viktor'", "#b05cff"),
     "listen": ("HEARING YOU...", "#37d67a"),
     "think":  ("THINKING...", "#b05cff"),
     "speak":  ("SPEAKING...", "#37d67a"),
@@ -219,13 +270,11 @@ def main():
     worker = VoiceWorker(cfg, ui_status, ui_log)
     worker.start()
 
-    btn = tk.Button(root, text="Start listening", font=("Consolas", 10),
-                    bg="#9333ea", fg="white", relief="flat")
+    btn = tk.Button(root, text="Start listening", font=("Consolas", 10), bg="#9333ea", fg="white", relief="flat")
     def toggle():
         on = not worker.enabled.is_set()
         worker.set_enabled(on)
-        btn.config(text="Stop" if on else "Start listening",
-                   bg="#7a2b2b" if on else "#9333ea")
+        btn.config(text="Stop" if on else "Start listening", bg="#7a2b2b" if on else "#9333ea")
     btn.config(command=toggle)
     btn.pack(pady=8)
 
@@ -235,7 +284,7 @@ def main():
     root.protocol("WM_DELETE_WINDOW", close)
 
     if not cfg["apiKey"]:
-        ui_log("Add your Hermes API_SERVER_KEY to voice_config.json")
+        ui_log("No API key yet - open VIKTOR > SETTINGS and save it once")
     root.mainloop()
 
 if __name__ == "__main__":

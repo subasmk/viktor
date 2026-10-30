@@ -351,6 +351,16 @@ ipcMain.handle('scout-news', async () => {
 // Mascot walk: glide the overlay window sideways (idle antics). The debounced
 // 'moved' save persists wherever the walk ends - the new spot becomes home.
 let walking = false;
+let dragOffset = null;   // mascot drag: cursor-anchored window move
+ipcMain.on('overlay-drag-start', (_e, sx, sy) => {
+  if (!overlayWin) return;
+  const [x, y] = overlayWin.getPosition();
+  dragOffset = { dx: x - sx, dy: y - sy };
+});
+ipcMain.on('overlay-drag-move', (_e, sx, sy) => {
+  if (!overlayWin || !dragOffset) return;
+  overlayWin.setPosition(Math.round(sx + dragOffset.dx), Math.round(sy + dragOffset.dy));
+});
 ipcMain.handle('overlay-walk', async (_e, dx) => {
   if (!overlayWin || walking || !dx) return false;
   walking = true;

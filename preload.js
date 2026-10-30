@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('companion', {
   chat: (messages, sessionKey) => ipcRenderer.invoke('hermes-chat', messages, sessionKey),
   walk: (dx) => ipcRenderer.invoke('overlay-walk', dx),
+  dragStart: (x, y) => ipcRenderer.send('overlay-drag-start', x, y),
+  dragMove: (x, y) => ipcRenderer.send('overlay-drag-move', x, y),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   scoutNews: () => ipcRenderer.invoke('scout-news'),
   cancel: () => ipcRenderer.invoke('hermes-cancel'),

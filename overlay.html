@@ -13,7 +13,7 @@
   #bubble{color:#241239;font-family:'Pixelify Sans';font-size:13px;line-height:1.25;word-wrap:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
   #bubbleWrap::after{content:'';position:absolute;right:-16px;top:calc(50% - 8px);border:8px solid transparent;border-left:8px solid #241239}
   #bubbleWrap::before{content:'';position:absolute;right:-9px;top:calc(50% - 5px);border:5px solid transparent;border-left:5px solid #fff;z-index:1}
-  #sprite{filter:drop-shadow(0 0 16px rgba(147,51,234,.55));-webkit-app-region:no-drag;cursor:pointer;animation:bob 6s ease-in-out infinite}
+  #sprite{-webkit-user-drag:none;filter:drop-shadow(0 0 16px rgba(147,51,234,.55));-webkit-app-region:no-drag;cursor:pointer;animation:bob 6s ease-in-out infinite}
   #sprite.listening{filter:drop-shadow(0 0 26px rgba(176,92,255,.95));animation:bob 2.2s ease-in-out infinite}
   #sprite.speaking{filter:drop-shadow(0 0 26px rgba(176,92,255,.95));animation:bob 1.6s ease-in-out infinite}
   #sprite.working{animation:sway 1.6s ease-in-out infinite}
@@ -22,7 +22,7 @@
   @keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
   #sprite.sleepy{filter:grayscale(.4) drop-shadow(0 0 8px rgba(147,51,234,.3));animation:bob 9s ease-in-out infinite}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-  #spriteImg{display:none;max-width:172px;max-height:150px;object-fit:contain;-webkit-app-region:no-drag;cursor:pointer;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));animation:bob 6s ease-in-out infinite}
+  #spriteImg{-webkit-user-drag:none;display:none;max-width:172px;max-height:150px;object-fit:contain;-webkit-app-region:no-drag;cursor:pointer;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));animation:bob 6s ease-in-out infinite}
   #spriteImg.shiba-listening{filter:drop-shadow(0 0 18px rgba(176,92,255,.8));animation:bob 2.2s ease-in-out infinite}
   #spriteImg.shiba-speaking{animation:bob 1.4s ease-in-out infinite}
   #spriteImg.shiba-working{animation:sway 1.6s ease-in-out infinite}
@@ -37,7 +37,7 @@
   <div id="bubbleWrap"><div id="bubble"></div><div id="bubbleDest"></div></div>
   <div id="catCol">
     <canvas id="sprite" width="120" height="120" title="Click: talk · Drag: move · Right-click: menu"></canvas>
-    <img id="spriteImg" alt="VIKTOR" title="Click: talk · Drag: move · Right-click: menu">
+    <img id="spriteImg" alt="VIKTOR" draggable="false" title="Click: talk · Drag: move · Right-click: menu">
     <div id="state">starting…</div>
     <div id="hint">click = talk · drag = move</div>
   </div>

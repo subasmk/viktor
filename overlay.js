@@ -69,12 +69,22 @@
     lastInteract = Date.now();
   }); health(); setInterval(health, 30000); }
 
-  // click vs drag
-  let moved = false, downX = 0, downY = 0;
-  for (const el of [canvas, img]) el.addEventListener('pointerdown', (e) => { moved = false; downX = e.screenX; downY = e.screenY; });
-  for (const el of [canvas, img]) el.addEventListener('pointermove', (e) => { if (Math.hypot(e.screenX - downX, e.screenY - downY) > 6) moved = true; });
+  // click vs drag: drag moves the window via IPC (never an OS file drag), click talks
+  let moved = false, downX = 0, downY = 0, down = false;
+  for (const el of [canvas, img]) el.addEventListener('pointerdown', (e) => {
+    moved = false; down = true; downX = e.screenX; downY = e.screenY;
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    if (api && api.dragStart) api.dragStart(e.screenX, e.screenY);
+  });
+  for (const el of [canvas, img]) el.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    if (!moved && Math.hypot(e.screenX - downX, e.screenY - downY) > 6) moved = true;
+    if (moved && api && api.dragMove) api.dragMove(e.screenX, e.screenY);
+  });
   // click = talk to VIKTOR (mic on/off), never the dashboard - console is right-click / Ctrl+B
-  for (const el of [canvas, img]) el.addEventListener('pointerup', async () => {
+  for (const el of [canvas, img]) el.addEventListener('pointerup', async (e) => {
+    down = false;
+    try { el.releasePointerCapture(e.pointerId); } catch {}
     if (moved || !api) return;
     lastInteract = Date.now();
     const r = await api.toggleVoice().catch(() => null);

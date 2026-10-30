@@ -7,7 +7,7 @@ import torchaudio as ta
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ref = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "refs", "ref-liam-teen3-24k.wav")
+ref = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "refs", "ref-liam-24k.wav")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device={device}")
 if device == "cuda":

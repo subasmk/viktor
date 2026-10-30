@@ -1,0 +1,15 @@
+{
+  "reference": "voice/refs/ref-liam-24k.wav",
+  "reference_source": "Kokoro-82M am_liam (Apache-2.0 license), fully synthetic, unshifted. No real person or character.",
+  "engine": "ResembleAI/chatterbox-turbo (MIT license)",
+  "chosen": "2026-10-30 - user picked the 'American playful' audition sample (vibe-amer.mp3)",
+  "audition_generation": {
+    "path": "onnx-sandbox",
+    "dtype": "quantized",
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "repetition_penalty": 1.2,
+    "sample_rate": 24000
+  },
+  "production_note": "Laptop production uses the torch pip package (chatterbox-tts), fp16 on his GPU. Audition used the ONNX q8 route; final tone is verified on-laptop before it becomes the watcher speaker."
+}

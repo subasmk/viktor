@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('companion', {
   models: () => ipcRenderer.invoke('hermes-models'),
   detectHermes: () => ipcRenderer.invoke('detect-hermes'),
   getConfig: () => ipcRenderer.invoke('get-config'),
+  onConfigChanged: (cb) => ipcRenderer.on('config-changed', (_e, cfg) => cb(cfg)),
   setConfig: (c) => ipcRenderer.invoke('set-config', c),
   openConsole: () => ipcRenderer.invoke('open-console'),
   toggleVoice: () => ipcRenderer.invoke('toggle-voice'),

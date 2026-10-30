@@ -22,6 +22,13 @@
   @keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
   #sprite.sleepy{filter:grayscale(.4) drop-shadow(0 0 8px rgba(147,51,234,.3));animation:bob 9s ease-in-out infinite}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+  #spriteImg{display:none;width:172px;max-height:176px;object-fit:contain;-webkit-app-region:no-drag;cursor:pointer;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));animation:bob 6s ease-in-out infinite}
+  #spriteImg.shiba-listening{filter:drop-shadow(0 0 18px rgba(176,92,255,.8));animation:bob 2.2s ease-in-out infinite}
+  #spriteImg.shiba-speaking{animation:bob 1.4s ease-in-out infinite}
+  #spriteImg.shiba-working{animation:sway 1.6s ease-in-out infinite}
+  #spriteImg.shiba-happy{animation:jump .7s ease-in-out infinite}
+  #spriteImg.shiba-walk{animation:bob .56s ease-in-out infinite}
+  #spriteImg.shiba-sleep,#spriteImg.shiba-sleepy{filter:grayscale(.35) drop-shadow(0 4px 10px rgba(0,0,0,.4));animation:bob 9s ease-in-out infinite}
   #state{margin-top:8px;font-size:10px;color:#cfc3e8;background:rgba(20,16,28,.85);border:1px solid rgba(176,92,255,.35);border-radius:999px;padding:3px 10px;-webkit-app-region:no-drag}
   #hint{font-family:'Pixelify Sans';font-size:9px;color:#8b8699;margin-top:5px;opacity:0;transition:opacity .3s}
   body:hover #hint{opacity:1}
@@ -30,10 +37,12 @@
   <div id="bubbleWrap"><div id="bubble"></div><div id="bubbleDest"></div></div>
   <div id="catCol">
     <canvas id="sprite" width="120" height="120" title="Click: talk · Drag: move · Right-click: menu"></canvas>
+    <img id="spriteImg" alt="VIKTOR" title="Click: talk · Drag: move · Right-click: menu">
     <div id="state">starting…</div>
     <div id="hint">click = talk · drag = move</div>
   </div>
   <script src="mascot.js"></script>
+  <script src="mascot-sprite.js"></script>
   <script src="persona.js"></script>
   <script src="overlay.js"></script>
 </body></html>

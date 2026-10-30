@@ -55,3 +55,16 @@ In SETTINGS you can give the mascot a personality (`mild` / `cheeky`) and switch
 - The console conversation is a separate Hermes session (`X-Hermes-Session-Key: desktop-console`) - your Telegram chats are untouched.
 - GPU/VRAM readouts show `--`: browsers can't probe hardware honestly. A local status bridge can fill them later.
 - The name shows as VIKTOR by default; change "Assistant name" in SETTINGS anytime.
+
+## Mascot: the Shiba (or the pixel cat)
+
+The default mascot is now a cool Shiba Inu in anime-sticker style (sunglasses,
+purple bandana, "V" tag) with a pose for every state: sitting smug (idle),
+paw-at-ear (listening), paw-on-chin (thinking/working), mid-speech, victory
+jump (happy), reclined (sitting around), curled up asleep, dramatic defeat
+(Hermes offline), an unimpressed glare (annoyed), a two-frame walk when he
+wanders, and a peek over the edge when the proactive scout has an offer.
+Poses live in `assets/shiba/`; the engine is `mascot-sprite.js` and exposes
+the same `setState()` interface as the pixel mascot.
+
+Prefer the original? Settings -> Mascot -> "Pixel cat" switches back, live.

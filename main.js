@@ -16,6 +16,7 @@ const DEFAULTS = {
   speakReplies: true,
   personality: 'off',      // persona + proactive scout are explicit opt-in (SETTINGS)
   proactive: false,
+  mascotStyle: 'shiba',    // 'shiba' (sprite dog) or 'pixel' (classic cat) - SETTINGS
   ttsVoice: '',
   overlayAlwaysOnTop: true,
   overlayPos: null,
@@ -299,7 +300,7 @@ ipcMain.handle('detect-hermes', () => {
 });
 
 ipcMain.handle('get-config', () => config);
-ipcMain.handle('set-config', (_e, c) => { saveConfig(c); return config; });
+ipcMain.handle('set-config', (_e, c) => { saveConfig(c); if (overlayWin) overlayWin.webContents.send('config-changed', config); return config; });
 ipcMain.handle('open-console', () => createConsole());
 ipcMain.handle('set-state', (_e, s) => { broadcastState(s); });
 ipcMain.handle('quit', () => app.quit());

@@ -1,9 +1,32 @@
 (function () {
   const api = window.companion;
   const canvas = document.getElementById('sprite');
+  const img = document.getElementById('spriteImg');
   const stateEl = document.getElementById('state');
   const catCol = document.getElementById('catCol');
-  const mascot = new CompanionMascot.Mascot(canvas);
+  const pixelMascot = new CompanionMascot.Mascot(canvas);
+  const spriteMascot = new SpriteMascot(img);
+  let style = 'shiba';   // default mascot; Settings can switch to the pixel cat
+  const mascot = {
+    setState(s) {
+      if (style === 'shiba') spriteMascot.setState(s);
+      else pixelMascot.setState(s === 'peek' ? 'happy' : s);   // the pixel cat has no peek pose
+    },
+    isShiba() { return style === 'shiba'; },
+  };
+  function applyStyle() {
+    const shiba = style === 'shiba';
+    img.style.display = shiba ? 'block' : 'none';
+    canvas.style.display = shiba ? 'none' : 'block';
+  }
+  applyStyle();
+  if (api && api.getConfig) api.getConfig().then((cfg) => {
+    if (cfg && cfg.mascotStyle === 'pixel') { style = 'pixel'; applyStyle(); mascot.setState(current); }
+  }).catch(() => {});
+  if (api && api.onConfigChanged) api.onConfigChanged((cfg) => {   // Settings mascot switch applies live
+    const s = cfg && cfg.mascotStyle === 'pixel' ? 'pixel' : 'shiba';
+    if (s !== style) { style = s; applyStyle(); mascot.setState(current); }
+  });
 
   const LABELS = {
     idle: 'online', listening: 'listening…', speaking: 'speaking…',
@@ -48,10 +71,10 @@
 
   // click vs drag
   let moved = false, downX = 0, downY = 0;
-  canvas.addEventListener('pointerdown', (e) => { moved = false; downX = e.screenX; downY = e.screenY; });
-  canvas.addEventListener('pointermove', (e) => { if (Math.hypot(e.screenX - downX, e.screenY - downY) > 6) moved = true; });
+  for (const el of [canvas, img]) el.addEventListener('pointerdown', (e) => { moved = false; downX = e.screenX; downY = e.screenY; });
+  for (const el of [canvas, img]) el.addEventListener('pointermove', (e) => { if (Math.hypot(e.screenX - downX, e.screenY - downY) > 6) moved = true; });
   // click = talk to VIKTOR (mic on/off), never the dashboard - console is right-click / Ctrl+B
-  canvas.addEventListener('pointerup', async () => {
+  for (const el of [canvas, img]) el.addEventListener('pointerup', async () => {
     if (moved || !api) return;
     lastInteract = Date.now();
     const r = await api.toggleVoice().catch(() => null);
@@ -60,12 +83,13 @@
       stateEl.style.color = '#ff8b8b';
       setTimeout(() => apply(current), 2600);
     } else if (r && r.enabled) {
-      apply('listening');
+      if (mascot.isShiba()) { spriteMascot.setState('wave'); setTimeout(() => { if (current === 'idle') apply('listening'); }, 900); }
+      else apply('listening');
     } else if (r && r.ok && r.enabled === false) {
       sulkOff();   // mic switched off -> Dexter-style exit, then he slinks back
     }
   });
-  canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (api) api.overlayMenu(); });
+  for (const el of [canvas, img]) el.addEventListener('contextmenu', (e) => { e.preventDefault(); if (api) api.overlayMenu(); });
 
   // ---------- Dexter mode: sulk-off, idle antics, quips, proactive ----------
   let lastInteract = Date.now();
@@ -173,7 +197,7 @@
     bubble.textContent = pendingSuggestion.text;
     bubbleDest.textContent = 'opens ' + u.hostname + ' - nothing else runs';
     bubbleWrap.classList.add('show');
-    mascot.setState('happy');
+    mascot.setState('peek');   // the dog peeks over the edge with the offer (pixel cat: happy bounce)
     setTimeout(() => { if (current === 'idle' && !pose) mascot.setState('idle'); }, 2000);
     setTimeout(() => { if (pendingSuggestion && pendingSuggestion.url === u.toString()) { pendingSuggestion = null; hideBubble(); } }, 120000);
   }

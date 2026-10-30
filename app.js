@@ -2,7 +2,7 @@
   const api = window.companion; // preload bridge (absent if opened as a plain file)
   const $ = (id) => document.getElementById(id);
 
-  let config = { endpoint: 'http://127.0.0.1:8642/v1', apiKey: '', sessionKey: 'desktop-console', appName: 'VIKTOR', speakReplies: true, personality: 'off', ttsVoice: '' };
+  let config = { endpoint: 'http://127.0.0.1:8642/v1', apiKey: '', sessionKey: 'desktop-console', appName: 'VIKTOR', speakReplies: true, personality: 'off', mascotStyle: 'shiba', ttsVoice: '' };
   let live = false;
   let busy = false;
   let generation = 0;
@@ -229,6 +229,7 @@
     $('setSpeak').checked = !!config.speakReplies;
     $('setProactive').checked = config.proactive !== false;
     $('setPersonality').value = config.personality || 'off';
+    $('setMascot').value = config.mascotStyle || 'shiba';
     populateVoices();
     if (api && api.detectHermes) {
       const d = await api.detectHermes();
@@ -246,6 +247,7 @@
     config.speakReplies = $('setSpeak').checked;
     config.proactive = $('setProactive').checked;
     config.personality = $('setPersonality').value;
+    config.mascotStyle = $('setMascot').value;
     await saveConfig();
     $('appLogo').textContent = config.appName.toUpperCase();
     $('setStatus').textContent = 'Saved.';

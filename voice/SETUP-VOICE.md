@@ -1,19 +1,24 @@
-# VIKTOR voice (Chatterbox Turbo) - laptop setup
+# VIKTOR voice - D-drive setup (matches the auditioned voice exactly)
 
-Everything installs to D:. Hermes's own Python/config is never touched.
+One command from the repo folder (or give Hermes the prompt from the team chat):
 
-1. `py -0p` - need a Python 3.10-3.12. If none: `winget install astral-sh.uv`, then
-   `setx UV_PYTHON_INSTALL_DIR "D:\viktor-voice\python"`, `setx UV_CACHE_DIR "D:\viktor-voice\uv-cache"`,
-   `setx HF_HOME "D:\viktor-voice\hf"`, reopen terminal, `uv python install 3.12`.
-2. `uv venv D:\viktor-voice\venv --python 3.12` (or `py -3.12 -m venv D:\viktor-voice\venv` if 3.12 exists)
-3. `D:\viktor-voice\venv\Scripts\activate`
-4. `uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126`
-   (or `pip install ...`; use `cu121` if cu126 fails; CPU fallback: plain `pip install torch torchaudio`, slower)
-5. `uv pip install chatterbox-tts` (verified against 0.1.7)
-6. From the repo root: `python voice/viktor_voice_gen.py voice/refs/ref-liam-teen3-24k.wav`
-   then the same with ref-puck-teen4-24k.wav (and ref-liam.wav / ref-puck.wav for a slightly older tone).
-   First run downloads ~4 GB of model weights to HF_HOME (D:). Outputs: voice/samples-out/.
-   The script prints peak GPU memory; report it back.
+    powershell -ExecutionPolicy Bypass -File voice\setup-voice.ps1
 
-Notes: Chatterbox Turbo is MIT; references are synthetic (Kokoro, Apache-2.0), pitch-shifted, no real person.
-Output carries Resemble's inaudible PerTh watermark automatically.
+What it does (and ONLY this):
+- Finds Python 3.10-3.12 via the py launcher, or bootstraps uv + Python 3.12 into D:\viktor-voice
+  (standalone zip, no installer, no admin, no C: writes). Hermes's own Python 3.14.9 is never touched.
+- Creates D:\viktor-voice\venv and installs: onnxruntime, transformers, soundfile, numpy, huggingface_hub.
+- Downloads the quantized Chatterbox-Turbo ONNX files (~1.2 GB) into D:\viktor-voice\hf.
+- Renders 3 audition samples with YOUR selected voice (voice/selected-voice.json -> refs/ref-liam-24k.wav)
+  into D:\viktor-voice\samples, then writes D:\viktor-voice\READY.
+- Needs ~3 GB free on D:. No GPU, no torch, no CUDA: this is the exact engine + config (quantized,
+  temp 0.8, top_p 0.95, rep-penalty 1.2) that generated the voice sample you picked.
+
+Every cache lives under D:\viktor-voice (pip cache, HF cache, uv cache, samples, say output).
+Nothing writes to C:. If anything can't proceed, the script prints STOP with the reason.
+
+After READY exists, the VIKTOR watcher (mascot click) speaks replies with this voice automatically.
+First reply loads the model (~1 min one time), then keeps it warm. If the voice setup is missing
+or fails, the watcher logs it and keeps the old Windows voice - nothing breaks.
+
+To uninstall: delete D:\viktor-voice. Done.

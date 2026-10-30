@@ -11,5 +11,5 @@
     "repetition_penalty": 1.2,
     "sample_rate": 24000
   },
-  "production_note": "Laptop production uses the torch pip package (chatterbox-tts), fp16 on his GPU. Audition used the ONNX q8 route; final tone is verified on-laptop before it becomes the watcher speaker."
+  "production_note": "Laptop production uses the SAME engine + config as the audition: Chatterbox-Turbo ONNX, quantized dtype, temp 0.8 / top_p 0.95 / rep-penalty 1.2 (chatterbox_server.py). No torch/CUDA install. Latency on his laptop CPU is unverified until setup runs there; the watcher falls back to pyttsx3 until READY exists."
 }

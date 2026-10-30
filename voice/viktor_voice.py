@@ -88,6 +88,7 @@ class VoiceWorker(threading.Thread):
         self.stopped = threading.Event()
         self.audio_source = audio_source   # test hook: yields int16 frames instead of mic
         self.speaker = speaker             # test hook: callable(text) instead of pyttsx3
+        self._cb_speaker = None          # lazy Chatterbox speaker (None=untried, False=unavailable)
         self._whisper = None
         self._q = queue.Queue()
         self.skip_wake_once = False   # set when mic opened manually: next utterance is the command
@@ -144,6 +145,19 @@ class VoiceWorker(threading.Thread):
     def _speak(self, text):
         if self.speaker is not None:
             self.speaker(text); return
+        if self._cb_speaker is None:
+            try:
+                import chatterbox_speaker
+                self._cb_speaker = chatterbox_speaker.make_speaker(self.log) or False
+            except Exception as e:
+                self.log(f"voice: chatterbox speaker init failed ({e}); using pyttsx3")
+                self._cb_speaker = False
+        if self._cb_speaker:
+            try:
+                self._cb_speaker(text); return
+            except Exception as e:
+                self.log(f"voice: chatterbox speak failed ({e}); using pyttsx3")
+                self._cb_speaker = False
         import pyttsx3
         eng = pyttsx3.init()
         eng.say(text); eng.runAndWait(); eng.stop()

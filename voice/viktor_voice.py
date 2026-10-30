@@ -354,7 +354,7 @@ def _write_state(state_path):
             reply = getattr(on_status, "reply", None)
             payload = {"state": s, "updated": time.time()}
             if eng: payload["engine"] = eng
-            if reply: payload["reply"] = reply[:500]
+            if reply: payload["reply"] = reply  # full reply retained; the overlay clamps visually
             state_path.write_text(json.dumps(payload), encoding="utf-8")
             on_status.reply = None
         except Exception:

@@ -1,0 +1,7 @@
+openwakeword
+onnxruntime
+sounddevice
+faster-whisper
+pyttsx3
+numpy
+requests

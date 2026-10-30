@@ -55,7 +55,10 @@
       const host = (config.endpoint || '').replace(/^https?:\/\//, '').split('/')[0];
       setBadge(true, host);
       $('sysRoute').className = 'tag-ok';
-      if (m && m.data && m.data[0]) $('sysBackend').textContent = m.data[0].id || 'hermes-agent';
+      if (m && m.data && m.data[0]) {
+        $('sysBackend').textContent = m.data[0].id || 'hermes-agent';
+        if (m.data[0].id && m.data[0].id !== config.modelName) { config.modelName = m.data[0].id; saveConfig(); }
+      }
       if (!busy) setState('idle');
     } catch (e) {
       setBadge(false, (config.endpoint || '').replace(/^https?:\/\//, '').split('/')[0]);
@@ -123,7 +126,7 @@
       if (c.delta) {
         acc += c.delta;
         if (!bubble) { typing.remove(); bubble = addMsg('ai', ''); }
-        bubble.firstChild.textContent = acc;
+        bubble.textContent = acc;
         $('chatScroll').scrollTop = $('chatScroll').scrollHeight;
       }
       if (c.failed) {

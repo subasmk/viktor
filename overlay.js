@@ -22,7 +22,15 @@
     catch { apply('sleepy'); }
   }
   let current = 'idle';
-  if (api) { api.onState((s) => { current = s; apply(s); }); health(); setInterval(health, 30000); }
+  let happyT = null;
+  if (api) { api.onState((s) => {
+    const prev = current; current = s;
+    if (prev === 'speaking' && s === 'idle') {
+      apply('happy');  // finished talking -> happy bounce, then settle
+      clearTimeout(happyT);
+      happyT = setTimeout(() => { if (current === 'idle') apply('idle'); }, 2400);
+    } else apply(s);
+  }); health(); setInterval(health, 30000); }
 
   // click vs drag
   let moved = false, downX = 0, downY = 0;

@@ -1,6 +1,6 @@
 {
   "name": "viktor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "V.I.K.T.O.R. - desktop companion (overlay mascot + console) for a local Hermes Agent",
   "private": true,
   "main": "main.js",

@@ -1,0 +1,13 @@
+{
+  "name": "viktor",
+  "version": "0.1.0",
+  "description": "V.I.K.T.O.R. - desktop companion (overlay mascot + console) for a local Hermes Agent",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

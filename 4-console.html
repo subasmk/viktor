@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VIKTOR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Rubik:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="vignette"></div>
+
+<header>
+  <div class="logo" id="appLogo">VIKTOR</div>
+  <nav class="nav">
+    <button class="pill on" data-view="console">CONSOLE</button>
+    <button class="pill" data-view="notes">NOTES</button>
+    <button class="pill" data-view="skills">SKILLS</button>
+    <button class="pill" data-view="settings">SETTINGS</button>
+  </nav>
+  <div class="status-pill" id="connBadge"><span class="dot" id="connDot"></span><span id="connText">CHECKING…</span></div>
+</header>
+
+<main class="stage" id="view-console">
+  <aside class="panel sys">
+    <h3>SYSTEM</h3>
+    <div class="row"><span class="lab">BACKEND</span><b id="sysBackend">--</b></div>
+    <div class="row"><span class="lab">ROUTE</span><b id="sysRoute">--</b></div>
+    <div class="row"><span class="lab">LATENCY</span><b id="sysLatency">--</b></div>
+    <div class="row"><span class="lab">VOICE</span><b id="sysVoice">idle</b></div>
+    <div class="row"><span class="lab">UPTIME</span><b id="sysUptime">00:00:00</b></div>
+    <div class="row"><span class="lab">GPU / VRAM</span><b>--</b></div>
+    <p class="note">Hardware probes need a local status bridge (later). Chat works without it.</p>
+    <h3>SKILLS</h3>
+    <div id="skillList"></div>
+  </aside>
+
+  <section class="center" id="centerStage">
+    <button class="chip" style="left:2%;top:34%;animation-delay:-1s" data-cmd="open chrome">open chrome<small>TRY ME</small></button>
+    <button class="chip" style="right:1%;top:8%;animation-delay:-3s" data-cmd="what time is it">what time is it<small>TRY ME</small></button>
+    <button class="chip" style="left:6%;top:72%;animation-delay:-2s" data-cmd="what can you do">what can you do<small>ASK</small></button>
+    <button class="chip" style="right:4%;top:56%;animation-delay:-4.5s" data-cmd="search the web for today's AI news">search the web<small>TOOLS</small></button>
+    <button class="chip" style="left:38%;top:2%;animation-delay:-2.4s" data-cmd="delete the build folder">delete the build folder<small>RISKY · APPROVAL</small></button>
+
+    <div class="mascot m1" id="mascotMain" title="Hold to talk">
+      <canvas id="spriteMain" width="120" height="120"></canvas>
+      <div class="tag">hold to talk</div>
+      <div class="state" id="mascotState">idle</div>
+    </div>
+    <div class="mascot m2" id="mascotMini" title="Tap to teleport">
+      <canvas id="spriteMini" width="84" height="84"></canvas>
+      <div class="tag">tap to teleport</div>
+    </div>
+
+    <div class="orb-wrap">
+      <canvas id="orb" width="380" height="380"></canvas>
+      <div class="listen" id="orbState">CONNECTING…</div>
+      <div class="sub" id="orbSub">checking your Hermes…</div>
+    </div>
+  </section>
+
+  <aside class="panel hist">
+    <h3>COMMAND HISTORY</h3>
+    <div class="scroll" id="chatScroll"></div>
+  </aside>
+</main>
+
+<section class="view hidden" id="view-notes">
+  <div class="panel sheet">
+    <h3>NOTES <span class="hint">(this device only; sent to Hermes as context with each command)</span></h3>
+    <div class="mem-add">
+      <input id="memInput" placeholder="e.g. My hackathon deadline is Friday 6pm">
+      <button id="memAdd" class="btn">ADD</button>
+    </div>
+    <ul class="mem-list" id="memList"></ul>
+  </div>
+</section>
+
+<section class="view hidden" id="view-skills">
+  <div class="panel sheet">
+    <h3>SKILLS <span class="hint">(client-side toggles; Hermes tools run agent-side)</span></h3>
+    <div id="skillToggles" class="skill-toggles"></div>
+    <p class="note">Hermes runs its own tools (terminal, browser, files, memory, Telegram) when it answers. These switches only affect this console's behaviour.</p>
+  </div>
+</section>
+
+<section class="view hidden" id="view-settings">
+  <div class="panel sheet">
+    <h3>SETTINGS</h3>
+    <div class="form">
+      <label>Assistant name<input id="setName" placeholder="COMPANION"></label>
+      <label>Hermes API endpoint<input id="setEndpoint" placeholder="http://127.0.0.1:8642/v1"></label>
+      <label>API key (never leaves this laptop)<input id="setKey" type="password" placeholder="API_SERVER_KEY value"></label>
+      <label>Session key<input id="setSession" placeholder="desktop-console"></label>
+      <label>Reply voice<select id="setVoice"></select></label>
+      <label class="check"><input type="checkbox" id="setSpeak"> Speak replies out loud</label>
+      <div class="row-btns">
+        <button class="btn" id="setSave">SAVE</button>
+        <button class="btn ghost" id="setTest">TEST CONNECTION</button>
+      </div>
+      <p class="note" id="setStatus"></p>
+      <p class="note" id="hermesDetect"></p>
+    </div>
+  </div>
+</section>
+
+<div class="cmdbar">
+  <button class="mic" id="micBtn" title="Voice">
+    <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+  </button>
+  <input id="cmdInput" placeholder="Just say it, or type it… (OpenWhispr hotkey types here too)" autocomplete="off">
+  <div class="eq" id="eqLive"></div>
+  <button class="stop hidden" id="stopBtn">STOP</button>
+  <span class="kbd">CTRL+B</span>
+</div>
+
+<script src="mascot.js"></script>
+<script src="orb.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

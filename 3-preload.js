@@ -1,0 +1,14 @@
+const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('companion', {
+  chat: (messages) => ipcRenderer.invoke('hermes-chat', messages),
+  models: () => ipcRenderer.invoke('hermes-models'),
+  detectHermes: () => ipcRenderer.invoke('detect-hermes'),
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  setConfig: (c) => ipcRenderer.invoke('set-config', c),
+  openConsole: () => ipcRenderer.invoke('open-console'),
+  overlayMenu: () => ipcRenderer.invoke('overlay-menu'),
+  setState: (s) => ipcRenderer.invoke('set-state', s),
+  quit: () => ipcRenderer.invoke('quit'),
+  onChunk: (fn) => { const h = (_e, d) => fn(d); ipcRenderer.on('hermes-chunk', h); return () => ipcRenderer.removeListener('hermes-chunk', h); },
+  onState: (fn) => { const h = (_e, s) => fn(s); ipcRenderer.on('companion-state', h); return () => ipcRenderer.removeListener('companion-state', h); },
+});

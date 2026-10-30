@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('companion', {
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: (c) => ipcRenderer.invoke('set-config', c),
   openConsole: () => ipcRenderer.invoke('open-console'),
+  toggleVoice: () => ipcRenderer.invoke('toggle-voice'),
+  voiceStatus: () => ipcRenderer.invoke('voice-status'),
   overlayMenu: () => ipcRenderer.invoke('overlay-menu'),
   setState: (s) => ipcRenderer.invoke('set-state', s),
   quit: () => ipcRenderer.invoke('quit'),

@@ -71,6 +71,13 @@ def load_cfg():
         pass
     return cfg
 
+def data_dir():
+    import os
+    override = os.environ.get("VIKTOR_DATA_DIR")
+    if override:
+        return Path(override)
+    return Path.home() / "AppData" / "Roaming" / "viktor"
+
 class VoiceWorker(threading.Thread):
     def __init__(self, cfg, on_status, on_log, audio_source=None, speaker=None):
         super().__init__(daemon=True)
@@ -83,6 +90,7 @@ class VoiceWorker(threading.Thread):
         self.speaker = speaker             # test hook: callable(text) instead of pyttsx3
         self._whisper = None
         self._q = queue.Queue()
+        self.skip_wake_once = False   # set when mic opened manually: next utterance is the command
 
     def log(self, m): self.on_log(m)
 
@@ -145,7 +153,8 @@ class VoiceWorker(threading.Thread):
         import numpy as np
         buf, voiced, silent_for, t0 = [], False, 0.0, time.time()
         pre = []  # short pre-roll so the first syllable is not clipped
-        while time.time() - t0 < self.cfg["maxRecordSeconds"] and not self.stopped.is_set():
+        while (time.time() - t0 < self.cfg["maxRecordSeconds"]
+               and not self.stopped.is_set() and self.enabled.is_set()):
             fr = next(frames)
             if fr is None:
                 if voiced: break
@@ -181,6 +190,9 @@ class VoiceWorker(threading.Thread):
                 self._drain()
                 time.sleep(0.15)
                 continue
+            if self.skip_wake_once and not awaiting_command:
+                awaiting_command = True
+                self.skip_wake_once = False
             self.on_status("wake" if not awaiting_command else "listen")
             audio = self._collect_utterance(frames)
             if audio is None:
@@ -227,10 +239,13 @@ class VoiceWorker(threading.Thread):
                     self.log("Speech failed: " + str(e))
                 self._drain()  # discard anything the mic heard while speaking
 
-    def set_enabled(self, on):
-        if on: self.enabled.set()
+    def set_enabled(self, on, skip_wake=False):
+        if on:
+            if skip_wake: self.skip_wake_once = True
+            self.enabled.set()
         else:
             self.enabled.clear()
+            self.skip_wake_once = False
             self._drain()
 
     def stop(self):
@@ -267,7 +282,10 @@ def main():
     def ui_log(m):
         root.after(0, lambda: logline.config(text=m[:110]))
 
-    worker = VoiceWorker(cfg, ui_status, ui_log)
+    state_writer = _write_state(data_dir() / "voice-state.json")
+    def both_status(s):
+        ui_status(s); state_writer(s)
+    worker = VoiceWorker(cfg, both_status, ui_log)
     worker.start()
 
     btn = tk.Button(root, text="Start listening", font=("Consolas", 10), bg="#9333ea", fg="white", relief="flat")
@@ -287,5 +305,57 @@ def main():
         ui_log("No API key yet - open VIKTOR > SETTINGS and save it once")
     root.mainloop()
 
+# ---- headless mode: the desktop app drives the watcher with small JSON files ----
+def _write_state(state_path):
+    def on_status(s):
+        try:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps({"state": s, "updated": time.time()}), encoding="utf-8")
+        except Exception:
+            pass
+    return on_status
+
+def _command_loop(worker, cmd_path, log=None):
+    # ignore commands written before this watcher started
+    try:
+        last_seq = int(json.loads(cmd_path.read_text(encoding="utf-8")).get("seq", 0)) if cmd_path.exists() else 0
+    except Exception:
+        last_seq = 0
+    while not worker.stopped.is_set():
+        try:
+            if cmd_path.exists():
+                data = json.loads(cmd_path.read_text(encoding="utf-8"))
+                seq = int(data.get("seq", 0))
+                if seq > last_seq:
+                    last_seq = seq
+                    cmd = data.get("command")
+                    if cmd == "enable":
+                        worker.set_enabled(True, skip_wake=bool(data.get("skipWake")))
+                    elif cmd == "disable":
+                        worker.set_enabled(False)
+        except Exception as e:
+            if log:
+                try: log("voice command error: " + str(e))
+                except Exception: pass
+        time.sleep(0.25)
+
+def main_headless(cfg):
+    ddir = data_dir()
+    ddir.mkdir(parents=True, exist_ok=True)
+    state_path = ddir / "voice-state.json"
+    cmd_path = ddir / "voice-command.json"
+    worker = VoiceWorker(cfg, _write_state(state_path), lambda m: print(m, flush=True))
+    worker.start()
+    threading.Thread(target=_command_loop, args=(worker, cmd_path, worker.log), daemon=True).start()
+    print("VIKTOR voice headless ready; state -> " + str(state_path), flush=True)
+    try:
+        while not worker.stopped.is_set():
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        worker.stop()
+
 if __name__ == "__main__":
-    main()
+    if "--headless" in sys.argv:
+        main_headless(load_cfg())
+    else:
+        main()

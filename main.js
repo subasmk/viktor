@@ -2,8 +2,11 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, Menu, screen, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
-const CONFIG_PATH = () => path.join(app.getPath('userData'), 'config.json');
+// VIKTOR_DATA_DIR override exists so the whole app can be tested headless on CI/sandbox.
+const DATA_DIR = () => process.env.VIKTOR_DATA_DIR || app.getPath('userData');
+const CONFIG_PATH = () => path.join(DATA_DIR(), 'config.json');
 const DEFAULTS = {
   endpoint: 'http://127.0.0.1:8642/v1',
   apiKey: '',
@@ -71,6 +74,109 @@ function createConsole() {
 function broadcastState(state) {
   if (overlayWin) overlayWin.webContents.send('companion-state', state);
   if (consoleWin) consoleWin.webContents.send('companion-state', state);
+}
+
+// ---- Voice watcher bridge -------------------------------------------------
+// Clicking the mascot toggles the mic. The watcher (voice/viktor_voice.py) runs
+// headless as a child process; we talk to it through two tiny JSON files in the
+// app data dir so no ports or permissions are involved.
+const VOICE_STATE_PATH = () => path.join(DATA_DIR(), 'voice-state.json');
+const VOICE_CMD_PATH = () => path.join(DATA_DIR(), 'voice-command.json');
+
+let voiceProc = null;
+let voiceProcStartedAt = 0;
+let voiceState = 'off';        // off | wake | listen | think | speak
+let voiceError = '';           // set when the watcher cannot start / crashed
+const VOICE_OVERLAY_MAP = { wake: 'listening', listen: 'listening', think: 'working', speak: 'speaking', off: 'idle' };
+
+function voiceMicOn() { return voiceState !== 'off'; }
+
+function spawnVoice() {
+  if (voiceProc && !voiceProc.killed) return true;
+  const script = process.env.VIKTOR_VOICE_SCRIPT || path.join(__dirname, 'voice', 'viktor_voice.py');
+  const candidates = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+  const tryNext = (i) => {
+    if (i >= candidates.length) { voiceProc = null; voiceError = 'no-python'; return; }
+    let settled = false;
+    const proc = spawn(candidates[i], [script, '--headless'], {
+      env: { ...process.env, VIKTOR_DATA_DIR: DATA_DIR(), PYTHONIOENCODING: 'utf-8' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    proc.on('error', () => { if (!settled) { settled = true; tryNext(i + 1); } });
+    let earlyExit = true;
+    proc.on('spawn', () => {
+      settled = true;
+      voiceProc = proc;
+      voiceProcStartedAt = Date.now();
+      voiceError = '';
+      setTimeout(() => { earlyExit = false; }, 3000);
+    });
+    let errBuf = '';
+    proc.stderr.on('data', (d) => { errBuf = (errBuf + d.toString()).slice(-800); });
+    proc.on('exit', () => {
+      if (voiceProc === proc) voiceProc = null;
+      if (earlyExit && errBuf) {
+        voiceError = /ModuleNotFoundError|No module named/.test(errBuf) ? 'deps-missing' : 'crashed';
+        broadcastState('sleepy');
+      }
+    });
+  };
+  tryNext(0);
+  return true;
+}
+
+// seq is epoch-ms: monotonic across app sessions, so a fresh watcher never
+// mistakes a leftover command file from a previous run for a new one.
+function sendVoiceCommand(command, skipWake) {
+  try {
+    fs.writeFileSync(VOICE_CMD_PATH(), JSON.stringify({ command, seq: Date.now(), skipWake: !!skipWake }));
+    return true;
+  } catch { return false; }
+}
+
+// A just-spawned watcher may not have run its command-file init yet; wait until
+// it proves it is alive (state file written after spawn) before sending.
+function sendVoiceCommandWhenReady(command, skipWake) {
+  const deadline = Date.now() + 10000;
+  const tick = () => {
+    if (voiceProc && voiceProc.killed) return;
+    let updated = 0;
+    try { updated = JSON.parse(fs.readFileSync(VOICE_STATE_PATH(), 'utf8')).updated * 1000 || 0; } catch {}
+    if (updated >= voiceProcStartedAt - 1000 || Date.now() > deadline) {
+      sendVoiceCommand(command, skipWake);
+    } else {
+      setTimeout(tick, 250);
+    }
+  };
+  tick();
+}
+
+function toggleVoice() {
+  if (voiceMicOn()) {
+    sendVoiceCommand('disable');
+    return { ok: true, enabled: false };
+  }
+  const alreadyRunning = !!voiceProc;
+  spawnVoice();
+  if (voiceError === 'no-python') return { ok: false, error: 'no-python' };
+  if (alreadyRunning) sendVoiceCommand('enable', true);  // click = speak right away, no wake phrase needed first
+  else sendVoiceCommandWhenReady('enable', true);
+  return { ok: true, enabled: true };
+}
+
+function watchVoiceState() {
+  let last = '';
+  const read = () => {
+    let s = 'off';
+    try { s = JSON.parse(fs.readFileSync(VOICE_STATE_PATH(), 'utf8')).state || 'off'; } catch { return; }
+    if (s === last) return;
+    last = s; voiceState = s;
+    const mapped = VOICE_OVERLAY_MAP[s];
+    if (mapped) broadcastState(mapped);
+  };
+  try {
+    fs.watch(DATA_DIR(), (_e, f) => { if (f === 'voice-state.json') setTimeout(read, 50); });
+  } catch { /* a restart still picks up state */ }
 }
 
 // ---- Hermes bridge (main process: no CORS, key never touches the page) ----
@@ -145,6 +251,8 @@ ipcMain.handle('set-config', (_e, c) => { saveConfig(c); return config; });
 ipcMain.handle('open-console', () => createConsole());
 ipcMain.handle('set-state', (_e, s) => { broadcastState(s); });
 ipcMain.handle('quit', () => app.quit());
+ipcMain.handle('toggle-voice', () => toggleVoice());
+ipcMain.handle('voice-status', () => ({ state: voiceState, micOn: voiceMicOn(), error: voiceError, running: !!voiceProc }));
 
 // External tools (e.g. setup-hermes-api.ps1) may write config.json while the app
 // runs; reload it so the new key is used instead of being overwritten by a later save.
@@ -162,12 +270,15 @@ function watchConfigFile() {
 app.whenReady().then(() => {
   loadConfig();
   watchConfigFile();
+  watchVoiceState();
+  spawnVoice();                  // watcher starts mic-off; the mascot click opens the mic
   createOverlay();               // overlay mascot only, per design
   globalShortcut.register('Control+B', () => {
     if (consoleWin && consoleWin.isVisible()) consoleWin.hide();
     else createConsole();
   });
   const menu = Menu.buildFromTemplate([
+    { label: 'Voice on/off (or click the mascot)', click: () => toggleVoice() },
     { label: 'Open console (Ctrl+B)', click: () => createConsole() },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
@@ -175,5 +286,8 @@ app.whenReady().then(() => {
   ipcMain.handle('overlay-menu', () => menu.popup());
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  try { if (voiceProc) voiceProc.kill(); } catch {}
+});
 app.on('window-all-closed', () => { /* overlay keeps app alive; quit via menu */ });

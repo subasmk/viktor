@@ -28,6 +28,17 @@
   let moved = false, downX = 0, downY = 0;
   canvas.addEventListener('pointerdown', (e) => { moved = false; downX = e.screenX; downY = e.screenY; });
   canvas.addEventListener('pointermove', (e) => { if (Math.hypot(e.screenX - downX, e.screenY - downY) > 6) moved = true; });
-  canvas.addEventListener('pointerup', () => { if (!moved && api) api.openConsole(); });
+  // click = talk to VIKTOR (mic on/off), never the dashboard - console is right-click / Ctrl+B
+  canvas.addEventListener('pointerup', async () => {
+    if (moved || !api) return;
+    const r = await api.toggleVoice().catch(() => null);
+    if (r && r.ok === false) {
+      stateEl.textContent = r.error === 'no-python' ? 'voice needs python - run voice setup' : 'voice unavailable';
+      stateEl.style.color = '#ff8b8b';
+      setTimeout(() => apply(current), 2600);
+    } else if (r && r.enabled) {
+      apply('listening');
+    }
+  });
   canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (api) api.overlayMenu(); });
 })();

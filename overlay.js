@@ -5,7 +5,8 @@
   const stateEl = document.getElementById('state');
   const catCol = document.getElementById('catCol');
   const pixelMascot = new CompanionMascot.Mascot(canvas);
-  const spriteMascot = new SpriteMascot(img);
+  const spriteMascot = new SpriteMascot(img, document.getElementById('fx'), document.getElementById('thinkDots'));
+  window.__spriteMascot = spriteMascot;
   let style = 'shiba';   // default mascot; Settings can switch to the pixel cat
   const mascot = {
     setState(s) {

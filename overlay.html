@@ -22,13 +22,35 @@
   @keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
   #sprite.sleepy{filter:grayscale(.4) drop-shadow(0 0 8px rgba(147,51,234,.3));animation:bob 9s ease-in-out infinite}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-  #spriteImg{-webkit-user-drag:none;display:none;max-width:172px;max-height:150px;object-fit:contain;-webkit-app-region:no-drag;cursor:pointer;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));animation:bob 6s ease-in-out infinite}
-  #spriteImg.shiba-listening{filter:drop-shadow(0 0 18px rgba(176,92,255,.8));animation:bob 2.2s ease-in-out infinite}
-  #spriteImg.shiba-speaking{animation:bob 1.4s ease-in-out infinite}
-  #spriteImg.shiba-working{animation:sway 1.6s ease-in-out infinite}
-  #spriteImg.shiba-happy{animation:jump .7s ease-in-out infinite}
-  #spriteImg.shiba-walk{animation:bob .56s ease-in-out infinite}
-  #spriteImg.shiba-sleep,#spriteImg.shiba-sleepy{filter:grayscale(.35) drop-shadow(0 4px 10px rgba(0,0,0,.4));animation:bob 9s ease-in-out infinite}
+  #spriteWrap{position:relative;display:flex;align-items:center;justify-content:center}
+  #fx{position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:3}
+  .fxp{position:absolute;font-size:15px;font-weight:700;color:#b9a5ff;text-shadow:0 1px 6px rgba(0,0,0,.5);opacity:0;user-select:none}
+  .fxp.big{font-size:20px}
+  .fxring{position:absolute;left:50%;top:42%;width:120px;height:120px;border:2px solid rgba(176,92,255,.75);border-radius:50%;opacity:0;user-select:none}
+  #thinkDots{position:absolute;top:-14px;right:2px;display:none;gap:3px;z-index:3;pointer-events:none}
+  #thinkDots.on{display:flex}
+  #thinkDots span{width:6px;height:6px;border-radius:50%;background:#cfc3e8;animation:dotsBounce 1s ease-in-out infinite}
+  #thinkDots span:nth-child(2){animation-delay:.15s}
+  #thinkDots span:nth-child(3){animation-delay:.3s}
+  @keyframes dotsBounce{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-5px);opacity:1}}
+  @keyframes breathe{0%,100%{transform:translateY(0) scale(1,1)}50%{transform:translateY(-3px) scale(1.015,1.03)}}
+  @keyframes breatheSlow{0%,100%{transform:translateY(0) scale(1,1)}50%{transform:translateY(-1px) scale(1.008,1.045)}}
+  @keyframes talk{0%,100%{transform:translateY(0) scale(1,1)}25%{transform:translateY(-3.5px) scale(1.01,.99)}55%{transform:translateY(0) scale(.995,1.01)}75%{transform:translateY(-2.5px) scale(1.008,.995)}}
+  @keyframes lean{0%,100%{transform:rotate(-2.5deg) scale(1.045) translateY(-2px)}50%{transform:rotate(-1deg) scale(1.06) translateY(-4px)}}
+  @keyframes jumpX{0%,100%{transform:translateY(0) scale(1.07,.88)}30%{transform:translateY(-17px) scale(.95,1.07)}55%{transform:translateY(-13px) scale(.98,1.03)}78%{transform:translateY(0) scale(1.05,.9)}}
+  @keyframes rock{0%,100%{transform:rotate(-3.5deg) translateY(0)}50%{transform:rotate(3.5deg) translateY(-4px)}}
+  @keyframes tremble{0%,100%{transform:translateX(0)}25%{transform:translateX(-1.6px)}75%{transform:translateX(1.6px)}}
+  @keyframes wiggle{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}}
+  #spriteImg{-webkit-user-drag:none;display:none;max-width:172px;max-height:150px;object-fit:contain;-webkit-app-region:no-drag;cursor:pointer;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));animation:breathe 3.6s ease-in-out infinite;transform-origin:50% 92%}
+  #spriteImg.shiba-listening{filter:drop-shadow(0 0 18px rgba(176,92,255,.8));animation:lean 2s ease-in-out infinite}
+  #spriteImg.shiba-speaking{animation:talk .38s ease-in-out infinite}
+  #spriteImg.shiba-working{animation:sway 2.2s ease-in-out infinite}
+  #spriteImg.shiba-happy{animation:jumpX .72s ease-in-out infinite}
+  #spriteImg.shiba-walk{animation:rock .56s ease-in-out infinite}
+  #spriteImg.shiba-sleep,#spriteImg.shiba-sleepy{filter:grayscale(.35) drop-shadow(0 4px 10px rgba(0,0,0,.4));animation:breatheSlow 5s ease-in-out infinite}
+  #spriteImg.shiba-annoyed{animation:tremble .45s linear infinite}
+  #spriteImg.shiba-sit{animation:breatheSlow 5.5s ease-in-out infinite}
+  #spriteImg.shiba-wave{animation:wiggle .55s ease-in-out 3,breathe 3.6s ease-in-out 1.65s infinite}
   #state{margin-top:8px;font-size:10px;color:#cfc3e8;background:rgba(20,16,28,.85);border:1px solid rgba(176,92,255,.35);border-radius:999px;padding:3px 10px;-webkit-app-region:no-drag}
   #hint{font-family:'Pixelify Sans';font-size:9px;color:#8b8699;margin-top:5px;opacity:0;transition:opacity .3s}
   body:hover #hint{opacity:1}
@@ -36,8 +58,12 @@
 <body>
   <div id="bubbleWrap"><div id="bubble"></div><div id="bubbleDest"></div></div>
   <div id="catCol">
-    <canvas id="sprite" width="120" height="120" title="Click: talk · Drag: move · Right-click: menu"></canvas>
-    <img id="spriteImg" alt="VIKTOR" draggable="false" title="Click: talk · Drag: move · Right-click: menu">
+    <div id="spriteWrap">
+      <canvas id="sprite" width="120" height="120" title="Click: talk · Drag: move · Right-click: menu"></canvas>
+      <img id="spriteImg" alt="VIKTOR" draggable="false" title="Click: talk · Drag: move · Right-click: menu">
+      <div id="fx"></div>
+      <div id="thinkDots"><span></span><span></span><span></span></div>
+    </div>
     <div id="state">starting…</div>
     <div id="hint">click = talk · drag = move</div>
   </div>

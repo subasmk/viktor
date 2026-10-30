@@ -70,7 +70,17 @@ def main():
     srv.kill()
     pathlib.Path(p["ready"]).write_text(json.dumps({"engine": "chatterbox-turbo-onnx", "dtype": "quantized",
                                                     "setup_seconds": round(time.time()-t0, 1)}))
-    print("READY marker written. VIKTOR will now speak with the selected voice.")
+    # Lock the watcher to the selected voice: failure = visible error, never silent robotic fallback.
+    # User can later edit voice/voice_config.json ("voiceEngine": "auto") to allow the basic fallback.
+    vcfg = pathlib.Path(__file__).parent / "voice_config.json"
+    existing = {}
+    if vcfg.exists():
+        try: existing = json.loads(vcfg.read_text(encoding="utf-8"))
+        except Exception: existing = {}
+    existing["voiceEngine"] = "chatterbox"
+    vcfg.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    print("READY marker written + voiceEngine=chatterbox locked in voice_config.json.")
+    print("VIKTOR will now speak with the selected voice.")
     return 0
 
 if __name__ == "__main__":

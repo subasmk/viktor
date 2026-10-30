@@ -62,7 +62,10 @@ function createConsole() {
   consoleWin.loadFile('console.html');
   consoleWin.once('ready-to-show', () => consoleWin.show());
   consoleWin.on('closed', () => { consoleWin = null; });
-  consoleWin.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  consoleWin.webContents.setWindowOpenHandler(({ url }) => {
+    try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {}
+    return { action: 'deny' };
+  });
 }
 
 function broadcastState(state) {

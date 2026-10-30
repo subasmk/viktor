@@ -18,7 +18,8 @@ Every cache lives under D:\viktor-voice (pip cache, HF cache, uv cache, samples,
 Nothing writes to C:. If anything can't proceed, the script prints STOP with the reason.
 
 After READY exists, the VIKTOR watcher (mascot click) speaks replies with this voice automatically.
-First reply loads the model (~1 min one time), then keeps it warm. If the voice setup is missing
-or fails, the watcher logs it and keeps the old Windows voice - nothing breaks.
+First reply loads the model (~1 min one time), then keeps it warm. If the selected voice is missing or fails, the watcher shows the error
+(engine:error in its state + log) and stays silent - it never silently substitutes
+another voice or engine. Relax that later by editing voice/voice_config.json to "auto".
 
 To uninstall: delete D:\viktor-voice. Done.

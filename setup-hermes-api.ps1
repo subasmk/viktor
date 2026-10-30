@@ -5,7 +5,7 @@
 #   2. Refuses to touch anything if the API server was explicitly disabled (config.yaml or .env).
 #   3. Backs up .env, then makes sure it has a strong API_SERVER_KEY (keeps an existing good
 #      one; creates a random one only if missing or too short). Writes are atomic (temp + rename).
-#   4. Writes that key into VIKTOR's settings (%APPDATA%\viktor\config.json) so the app can connect.
+#   4. Writes that key into VIKTOR's settings (VIKTOR_DATA_DIR, else %APPDATA%\viktor\config.json) so the app can connect.
 # It does NOT restart Hermes. When you are ready:
 #   hermes gateway restart     (Telegram pauses for a few seconds)
 $ErrorActionPreference = 'Stop'
@@ -110,7 +110,7 @@ if ($key) {
 }
 
 # --- 4. write the key into VIKTOR's own settings (so you never paste it) ---
-$viktorDir = Join-Path $env:APPDATA 'viktor'
+$viktorDir = if ($env:VIKTOR_DATA_DIR) { $env:VIKTOR_DATA_DIR } else { Join-Path $env:APPDATA 'viktor' }
 $viktorCfg = Join-Path $viktorDir 'config.json'
 $cfg = $null
 if (Test-Path $viktorCfg) {

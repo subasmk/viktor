@@ -80,7 +80,9 @@ def load_cfg():
     cfg = dict(DEFAULT_CFG)
     # 1) shared config from the VIKTOR desktop app (key entered once, in the app)
     try:
-        appdata = Path.home() / "AppData" / "Roaming" / "viktor" / "config.json"
+        import os
+        base = Path(os.environ["VIKTOR_DATA_DIR"]) if os.environ.get("VIKTOR_DATA_DIR") else Path.home() / "AppData" / "Roaming" / "viktor"
+        appdata = base / "config.json"
         if appdata.exists():
             app_cfg = json.loads(appdata.read_text(encoding="utf-8"))
             for k in ("endpoint", "apiKey", "sessionKey", "modelName", "personality"):

@@ -179,11 +179,19 @@
     let notes = [];
     try { notes = JSON.parse(localStorage.getItem('companion.notes')) || []; } catch {}
     const kws = notes.join(' ').toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+    // Recency is not quality: prefer recognizable outlets (Google News titles
+    // end with " - Publisher") and demote hoax-bait headlines.
+    const OUTLETS = ['rockstar', 'ign', 'gamesradar', 'pc gamer', 'pcgamer', 'eurogamer', 'the verge', 'techcrunch',
+      'polygon', 'kotaku', 'gamespot', 'engadget', 'ars technica', "tom's hardware", 'reuters', 'bloomberg', 'bbc',
+      'wired', 'venturebeat', 'gamingbolt', 'push square', 'playstation', 'xbox', 'nintendo', 'ndtv', 'the hindu'];
     const scored = fresh.map((it) => {
       const t = it.title.toLowerCase();
+      const pub = t.includes(' - ') ? t.slice(t.lastIndexOf(' - ') + 3) : '';
       let s = 0;
       kws.forEach((k) => { if (t.includes(k)) s += 2; });
       if (/gta|rockstar|openai|gemini|claude|anthropic|launch|release|trailer|announce/.test(t)) s += 1;
+      if (OUTLETS.some((n) => pub.includes(n))) s += 3;
+      if (/\b(fake|hoax|scam)\b/.test(t)) s -= 3;
       return { it, s };
     }).sort((a, b) => b.s - a.s || b.it.when - a.it.when);
     const top = scored[0].it;

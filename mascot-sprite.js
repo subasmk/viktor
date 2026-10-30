@@ -1,6 +1,6 @@
 // SpriteMascot - the Shiba mascot. Same setState() interface as the pixel
-// Mascot (mascot.js), but each state shows a hand-drawn pose from
-// assets/shiba/. State -> pose:
+// Mascot (mascot.js), but each state shows a pose image from assets/shiba/
+// (user-supplied art). State -> pose:
 //   idle/smug -> idle (sitting, shades, smug)   listening -> paw at ear
 //   working   -> think (paw on chin)            speaking  -> mid-speech
 //   happy     -> excited (jump + sparkles)      sit       -> chill (reclined)

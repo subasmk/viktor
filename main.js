@@ -307,8 +307,10 @@ ipcMain.handle('quit', () => app.quit());
 // verified https URL in the browser. No agent task runs from this path.
 ipcMain.handle('open-external', async (_e, url) => {
   try {
-    const u = new URL(String(url));
-    if (u.protocol !== 'https:') return false;
+    const raw = String(url);
+    if (/[\x00-\x1f\x7f\s]/.test(raw)) return false;
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' || u.username || u.password) return false;
     await shell.openExternal(u.toString());
     return true;
   } catch { return false; }

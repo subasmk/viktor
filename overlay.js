@@ -12,13 +12,15 @@
   };
   const bubble = document.getElementById('bubble');
   const bubbleWrap = document.getElementById('bubbleWrap');
+  const bubbleDest = document.getElementById('bubbleDest');
+  function hideBubble() { bubbleWrap.classList.remove('show'); bubbleDest.textContent = ''; }
   function apply(s, reply) {
     mascot.setState(s);
     canvas.className = s;
     stateEl.textContent = LABELS[s] || s;
     stateEl.style.color = s === 'sleepy' ? '#ff8b8b' : '#cfc3e8';
     if (s === 'speaking' && reply) { bubble.textContent = reply; bubbleWrap.classList.add('show'); }
-    else if (s !== 'happy') bubbleWrap.classList.remove('show');  // keep the reply up through the happy beat
+    else if (s !== 'happy') hideBubble();  // keep the reply up through the happy beat
   }
   apply('idle');
 
@@ -72,7 +74,7 @@
 
   function sulkOff() {
     if (!catCol) return;
-    bubbleWrap.classList.remove('show');
+    hideBubble();
     catCol.classList.add('gone');
     clearTimeout(sulkTimer);
     sulkTimer = setTimeout(() => {
@@ -128,7 +130,7 @@
     bubble.textContent = list[Math.floor(Math.random() * list.length)];
     bubbleWrap.classList.add('show');
     mascot.setState('smug');
-    setTimeout(() => { if (current === 'idle' && !pendingSuggestion) { bubbleWrap.classList.remove('show'); if (!pose) apply('idle'); } }, 4200);
+    setTimeout(() => { if (current === 'idle' && !pendingSuggestion) { hideBubble(); if (!pose) apply('idle'); } }, 4200);
   }
   setTimeout(quipTick, 60000);
 
@@ -177,14 +179,20 @@
     if (raw.includes('\n') || raw.length > 260) return;   // one short visible offer only
     let parsed = null;
     let mm = raw.match(/^OFFER:\s*(.+?)\s*\|\s*(https:\/\/\S+)\s*$/i);
-    if (mm) parsed = { text: mm[1].slice(0, 180), url: mm[2] };
-    else { mm = raw.match(/^INFO:\s*(.+)$/i); if (mm) parsed = { text: mm[1].slice(0, 180), url: '' }; }
+    if (mm) {
+      let u = null;
+      try { u = new URL(mm[2]); } catch {}
+      if (u && u.protocol === 'https:' && !u.username && !u.password && !/[\x00-\x1f\x7f]/.test(mm[2])) {
+        parsed = { text: mm[1].slice(0, 180), url: u.toString(), host: u.hostname };
+      }
+    } else { mm = raw.match(/^INFO:\s*(.+)$/i); if (mm) parsed = { text: mm[1].slice(0, 180), url: '', host: '' }; }
     if (!parsed) return;
     bubble.textContent = parsed.text;
+    bubbleDest.textContent = parsed.host ? 'opens ' + parsed.host + ' - nothing else runs' : '';
     bubbleWrap.classList.add('show');
     mascot.setState('happy');
     setTimeout(() => { if (current === 'idle' && !pose) mascot.setState('idle'); }, 2000);
-    setTimeout(() => { if (pendingSuggestion === parsed) { pendingSuggestion = null; bubbleWrap.classList.remove('show'); } }, 120000);
+    setTimeout(() => { if (pendingSuggestion === parsed) { pendingSuggestion = null; hideBubble(); } }, 120000);
   }
   setTimeout(scoutTick, 180000);
 
@@ -198,10 +206,10 @@
       const ok = await api.openExternal(suggestion.url).catch(() => false);
       bubble.textContent = ok ? 'Opened!' : 'Could not open that link.';
     } else {
-      bubbleWrap.classList.remove('show');   // info-only: a click just dismisses
+      hideBubble();   // info-only: a click just dismisses
       return;
     }
     mascot.setState('happy');
-    setTimeout(() => { bubbleWrap.classList.remove('show'); if (current === 'idle' && !pose) apply('idle'); }, 6000);
+    setTimeout(() => { hideBubble(); if (current === 'idle' && !pose) apply('idle'); }, 6000);
   });
 })();

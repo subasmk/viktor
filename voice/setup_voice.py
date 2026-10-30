@@ -4,7 +4,9 @@ Steps: disk check -> venv -> deps (pip cache in voice home) -> model files (HF_H
 -> render 3 audition samples with chatterbox_server.py -> write READY marker."""
 import argparse, json, os, pathlib, shutil, subprocess, sys, time
 
-DEPS = ["onnxruntime", "transformers", "soundfile", "numpy", "huggingface_hub"]
+DEPS = ["onnxruntime", "transformers", "soundfile", "numpy", "huggingface_hub",
+        # watcher (mic -> whisper -> Hermes -> speak) runs in this same venv:
+        "faster-whisper", "sounddevice", "pyttsx3", "requests"]
 MODEL_ID = "ResembleAI/chatterbox-turbo-ONNX"
 MODEL_PATTERNS = ["onnx/*_quantized.onnx*", "tokenizer.json", "config.json"]
 SAMPLES = ["Yo, I'm up! What are we doing today?",

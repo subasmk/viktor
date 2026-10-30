@@ -123,12 +123,19 @@ function voiceScriptPath() {
 function spawnVoice() {
   if (voiceProc && !voiceProc.killed) return true;
   const script = voiceScriptPath();
-  const candidates = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+  // Prefer the isolated D:\viktor-voice venv (has mic/whisper/TTS deps); never
+  // touch Hermes's own Python. Fall back to PATH only when no venv exists yet.
+  const venvPy = 'D:\\viktor-voice\\venv\\Scripts\\python.exe';
+  const candidates = process.platform === 'win32'
+    ? (fs.existsSync(venvPy) ? [venvPy, 'python', 'py'] : ['python', 'py'])
+    : ['python3', 'python'];
   const tryNext = (i) => {
     if (i >= candidates.length) { voiceProc = null; voiceError = 'no-python'; return; }
     let settled = false;
     const proc = spawn(candidates[i], [script, '--headless'], {
-      env: { ...process.env, VIKTOR_DATA_DIR: DATA_DIR(), PYTHONIOENCODING: 'utf-8' },
+      env: { ...process.env, VIKTOR_DATA_DIR: DATA_DIR(), PYTHONIOENCODING: 'utf-8',
+        // Whisper model download stays on D: too, never in the C: user profile cache
+        ...(fs.existsSync('D:\\viktor-voice\\hf') ? { HF_HOME: 'D:\\viktor-voice\\hf' } : {}) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     proc.on('error', () => { if (!settled) { settled = true; tryNext(i + 1); } });

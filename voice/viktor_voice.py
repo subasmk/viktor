@@ -51,6 +51,20 @@ DEFAULT_CFG = {
 
 WAKE_RE = re.compile(r"^(hey|a|hey there|ok|okay)?\s*(viktor|victor|vector)\b[\s,.!?]*", re.IGNORECASE)
 
+_SENT_END = re.compile(r"(?<=[.!?])\s+")
+
+def split_for_speech(text, max_chunks=6):
+    """Split a reply into sentence chunks for pipelined render+play. The first chunk is
+    kept as short as the punctuation allows so first audio lands early; if there are more
+    sentences than max_chunks, the tail merges into the last chunk (one longer render
+    instead of an unbounded render queue). A reply with no sentence punctuation stays a
+    single chunk - exactly today's behavior."""
+    parts = [p.strip() for p in _SENT_END.split(" ".join(text.split())) if p.strip()]
+    while len(parts) > max_chunks:
+        parts[-2] += " " + parts[-1]
+        parts.pop()
+    return parts
+
 # "Dexter mode" personas - mirror of persona.js PROMPTS at the repo root.
 # Keep the two in sync when editing.
 PERSONA_PROMPTS = {
@@ -154,6 +168,15 @@ class VoiceWorker(threading.Thread):
         segments, _ = self._whisper.transcribe(audio_f32, beam_size=1, language="en")
         return " ".join(s.text for s in segments).strip()
 
+    # -- voice PC control: "open X" / "close X" handled locally; anything else -> Hermes --
+    def _handle_pc_command(self, command):
+        try:
+            import pc_control
+            return pc_control.handle(command, log=self.log)
+        except Exception as e:
+            self.log("pc-control failed open-handed: " + str(e))
+            return None
+
     # -- hermes --
     def ask_hermes(self, text):
         import requests
@@ -200,7 +223,12 @@ class VoiceWorker(threading.Thread):
         if self._cb_speaker:
             try:
                 self._set_engine("chatterbox")
-                self._cb_speaker(text); return
+                chunks = split_for_speech(text)
+                if len(chunks) > 1 and hasattr(self._cb_speaker, "speak_chunks"):
+                    self._cb_speaker.speak_chunks(chunks)
+                else:
+                    self._cb_speaker(text)
+                return
             except Exception as e:
                 self.log(f"voice: chatterbox speak failed ({e})")
                 try: self._cb_speaker.shutdown()
@@ -291,10 +319,12 @@ class VoiceWorker(threading.Thread):
 
             if not self.enabled.is_set():
                 continue
-            try:
-                reply = self.ask_hermes(command)
-            except Exception as e:
-                self.log("Hermes request failed: " + str(e)); continue
+            reply = self._handle_pc_command(command)
+            if reply is None:
+                try:
+                    reply = self.ask_hermes(command)
+                except Exception as e:
+                    self.log("Hermes request failed: " + str(e)); continue
             self.log('VIKTOR: "' + reply[:200] + '"')
 
             if self.cfg["speakReplies"] and reply and self.enabled.is_set():

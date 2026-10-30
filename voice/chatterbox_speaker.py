@@ -12,10 +12,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SERVER = os.path.join(HERE, "chatterbox_server.py")
 
 class ChatterboxSpeaker:
-    def __init__(self):
+    def __init__(self, log=None):
         self.proc = None
         self.render_lock = threading.Lock()  # serializes renders
         self.proc_lock = threading.Lock()    # guards the proc pointer (cancel/shutdown never wait on a render)
+        self.log = log or (lambda m: None)
 
     def _ensure(self):
         with self.proc_lock:
@@ -44,7 +45,8 @@ class ChatterboxSpeaker:
                 pass
             self.proc = None
 
-    def __call__(self, text):
+    def _render(self, text):
+        """Render text to a wav path via the persistent server. Serialized by render_lock."""
         with self.render_lock:
             if not self._ensure():
                 raise RuntimeError("chatterbox server failed to start")
@@ -61,7 +63,47 @@ class ChatterboxSpeaker:
             resp = json.loads(line)
             if not resp.get("ok"):
                 raise RuntimeError(resp.get("error", "speak failed"))
-            self._play(resp["wav"])
+            return resp["wav"]
+
+    def __call__(self, text):
+        self._play(self._render(text))
+
+    def speak_chunks(self, chunks):
+        """Render sentence chunks and play each as soon as it is ready: chunk n+1 renders
+        while chunk n plays, so first audio lands after one chunk's render instead of the
+        whole reply's. Same server, same voice config - no engine change. Raises like __call__."""
+        chunks = [c for c in chunks if c and c.strip()]
+        if not chunks:
+            return
+        if len(chunks) == 1:
+            self(chunks[0])
+            return
+        import time
+        t0 = time.time()
+        self.log(f"voice: chunked speak - {len(chunks)} chunks")
+        upcoming = {}
+
+        def pre(i):
+            try:
+                rt = time.time()
+                upcoming[i] = self._render(chunks[i])
+                self.log(f"voice: chunk {i + 1}/{len(chunks)} rendered in {time.time() - rt:.1f}s")
+            except Exception as e:
+                upcoming[i] = e
+
+        t = threading.Thread(target=pre, args=(0,), daemon=True)
+        t.start()
+        for i in range(len(chunks)):
+            t.join()
+            r = upcoming.pop(i)
+            if isinstance(r, Exception):
+                raise r
+            if i == 0:
+                self.log(f"voice: first audio after {time.time() - t0:.1f}s")
+            if i + 1 < len(chunks):
+                t = threading.Thread(target=pre, args=(i + 1,), daemon=True)
+                t.start()
+            self._play(r)
 
     @staticmethod
     def _play(path):
@@ -90,7 +132,7 @@ def make_speaker(log=print):
     try:
         if os.path.isfile(READY) and os.path.isfile(VENV_PY):
             log("voice: Chatterbox voice detected, using selected voice")
-            return ChatterboxSpeaker()
+            return ChatterboxSpeaker(log)
     except Exception as e:
         log(f"voice: Chatterbox unavailable ({e}); falling back")
     return None

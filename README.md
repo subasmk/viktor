@@ -20,12 +20,13 @@ A floating desktop companion (pixel mascot overlay + full console) that puts a f
 1. Install dependencies: `npm install`
 2. Start: `npm start` (the mascot appears bottom-right; nothing else opens)
 3. **Connect your Hermes (one time):**
-   - If your Hermes is the Nous Research Hermes Agent: open `%LOCALAPPDATA%\hermes\.env` and add:
+   - If your Hermes is the Nous Research Hermes Agent: open the `.env` in your Hermes home (default `%LOCALAPPDATA%\hermes\.env`, or `%HERMES_HOME%\.env` if you set one - the install folder like D:\hermes is NOT the config home) and add:
      ```
      API_SERVER_ENABLED=true
-     API_SERVER_KEY=<pick any long random string>
+     API_SERVER_KEY=<any random string of 16+ characters>
      ```
-     then restart the gateway (`hermes gateway`). Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server
+     then restart the gateway (`hermes gateway`). Source: hermes-agent repo, gateway/platforms/api_server.py (key min length 16, defaults 127.0.0.1:8642, auto-enables on key presence). Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server
+   - Quick check that the server is up, no secrets needed, in PowerShell: `curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:8642/v1/models` → `401` = running and correctly asking for the key; `000` = not enabled yet.
    - The API key never leaves your laptop. Do not share it in chats.
 4. Open the console (click the mascot), go to SETTINGS, paste the same key, keep the endpoint `http://127.0.0.1:8642/v1`, press TEST CONNECTION. Green HERMES LIVE = done.
 
@@ -33,7 +34,8 @@ If your assistant is a different "Hermes", just point the endpoint at any OpenAI
 
 ## Voice
 
-- **Mic input:** this app intentionally has no cloud speech-to-text. Use your OpenWhispr hotkey - it types straight into the command bar (works everywhere on Windows).
+- **Hands-free (wake word):** see `voice/` - a fully local watcher (openWakeWord + faster-whisper + Windows voices). Say the wake phrase, speak your command, it stops listening by itself when you go quiet, sends it to Hermes and speaks the reply. Mic is only open while its control window says so; press Stop or close it and the mic is off. Run: `voice\start-voice.bat`. Default wake model is the pre-trained "hey jarvis"; a custom "hey viktor" can be trained later.
+- **Mic input (push-to-talk):** your OpenWhispr hotkey types straight into the command bar (works everywhere on Windows).
 - **Spoken replies:** on by default, uses Windows voices (offline). Pick a voice in SETTINGS. Say/type "stop" or hit STOP to cut it off.
 
 ## Auto-start with Windows

@@ -1,9 +1,11 @@
 """VIKTOR voice PC control: "open X" / "close X" on Windows.
 
 Safety contract:
-- Acts only when the spoken target resolves to a discovered app (Start Menu shortcuts +
-  registry App Paths) or, for close, to visible windows. Anything unresolved returns None
-  so the command falls through to Hermes unchanged.
+- Once a command matches the open/close verb pattern, VIKTOR OWNS it: it never falls
+  through to Hermes. A denied target gets an explicit refusal, an unresolved target gets
+  "can't find it", an ambiguous one asks which. That way no guarded command can bypass
+  these rules via a less careful path. Only commands that never matched the verb pattern
+  fall through to Hermes.
 - open launches the resolved absolute path with os.startfile - no shell, no command strings.
 - close posts WM_CLOSE to the app's visible windows. That is the graceful path: the app
   keeps its own save prompt. No TerminateProcess, no taskkill, no force, ever.
@@ -19,6 +21,7 @@ VOICE_HOME = os.environ.get("VIKTOR_VOICE_HOME", r"D:\viktor-voice")
 _OPEN_RE = re.compile(r"^(?:please\s+)?(?:open|launch|start)\s+(.+?)\s*$", re.IGNORECASE)
 _CLOSE_RE = re.compile(r"^(?:please\s+)?(?:close|quit|exit)\s+(.+?)\s*$", re.IGNORECASE)
 _TRAIL = re.compile(r"\s+(?:app|application|please)$", re.IGNORECASE)
+_LEAD = re.compile(r"^(?:my|the|a|an)\s+", re.IGNORECASE)
 
 # image names that must never be closed from voice
 DENY_STEMS = {
@@ -35,7 +38,7 @@ def parse_intent(command):
     for verb, rx in (("open", _OPEN_RE), ("close", _CLOSE_RE)):
         m = rx.match(command.strip())
         if m:
-            target = _TRAIL.sub("", m.group(1)).strip()
+            target = _LEAD.sub("", _TRAIL.sub("", m.group(1)).strip()).strip()
             if 2 <= len(target) <= 60:
                 return verb, target
     return None
@@ -178,12 +181,17 @@ def handle(command, *, discovery=discover_apps, windows=list_windows,
         return None
     verb, target = intent
 
+    if _norm(target) in DENY_STEMS:
+        log(f"pc-control: denied {verb} of system component '{target}'")
+        return f"I won't {verb} {target} - Windows needs it running."
+
     if verb == "open":
         apps = discovery()
         names = {n: p for n, p in apps}
         hits = _match(target, list(names))
         if not hits:
-            return None  # not a known app - let Hermes answer
+            log(f"pc-control: open target '{target}' not found in discovered apps")
+            return f"I can't find an app called {target}."
         exact = [n for n in hits if n.lower() == target.lower()]
         if exact:
             hits = exact[:1]     # raw-name exact wins over normalized collisions (Notepad vs NotePad++)
@@ -197,8 +205,8 @@ def handle(command, *, discovery=discover_apps, windows=list_windows,
         except Exception as e:
             log(f"pc-control: launch failed for {name}: {e}")
             return f"I found {name} but couldn't open it."
-        log(f"pc-control: opened {name} -> {names[name]}")
-        return f"Opening {name}."
+        log(f"pc-control: launch requested for {name} -> {names[name]}")
+        return f"Telling {name} to open."
 
     # close: resolve against visible windows by exe stem or window title
     wins = windows()
@@ -218,7 +226,8 @@ def handle(command, *, discovery=discover_apps, windows=list_windows,
         installed = _match(target, list(names))
         if installed:
             return f"{installed[0]} doesn't look open right now."
-        return None
+        log(f"pc-control: close target '{target}' not found running or installed")
+        return f"I can't find an app called {target}."
     exact = [s for s in hits if _norm(s) == _norm(target)]
     if exact:
         stem = exact[0]          # an exact name wins over fuzzy extras
@@ -234,4 +243,4 @@ def handle(command, *, discovery=discover_apps, windows=list_windows,
         except Exception as e:
             log(f"pc-control: WM_CLOSE failed for {stem} (hwnd {hwnd}): {e}")
     log(f"pc-control: WM_CLOSE posted to {len(cands[stem])} window(s) of {stem}")
-    return f"Closing {stem}. If it asks about saving, choose there - I never force-close."
+    return f"Close request sent to {stem}. If it asks about saving, choose there - I never force-close."

@@ -96,7 +96,6 @@
     const v = voices.find(v => v.name === config.ttsVoice) || voices.find(v => /david|mark|guy|male/i.test(v.name)) || voices[0];
     if (v) u.voice = v;
     u.onstart = () => setState('speaking');
-    u.onend = () => setState(live ? 'idle' : 'sleepy');
     const lvl = setInterval(() => orb.setLevel(0.3 + Math.random() * 0.7), 120);
     u.onend = () => { clearInterval(lvl); orb.setLevel(0); setState(live ? 'idle' : 'sleepy'); };
     speechSynthesis.speak(u);
@@ -210,6 +209,15 @@
   });
 
   // ---------- settings ----------
+  function populateVoices() {
+    const sel = $('setVoice'); if (!sel) return;
+    const prev = config.ttsVoice || sel.value || '';
+    sel.innerHTML = '';
+    speechSynthesis.getVoices().forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name; if (v.name === prev) o.selected = true; sel.appendChild(o); });
+  }
+  // Windows often delivers the voice list AFTER first paint; without this the
+  // settings dropdown opens empty until the app is restarted.
+  if (window.speechSynthesis) speechSynthesis.addEventListener?.('voiceschanged', populateVoices);
   async function saveConfig() { if (api) config = await api.setConfig(config); }
   async function fillSettings() {
     $('setName').value = config.appName || '';
@@ -217,8 +225,7 @@
     $('setKey').value = config.apiKey || '';
     $('setSession').value = config.sessionKey || '';
     $('setSpeak').checked = !!config.speakReplies;
-    const sel = $('setVoice'); sel.innerHTML = '';
-    speechSynthesis.getVoices().forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name; if (v.name === config.ttsVoice) o.selected = true; sel.appendChild(o); });
+    populateVoices();
     if (api && api.detectHermes) {
       const d = await api.detectHermes();
       $('hermesDetect').textContent = d.hermesHome
@@ -287,8 +294,7 @@
   // ---------- command bar ----------
   $('micBtn').onclick = () => toggleListen();
   $('cmdInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { sendCommand($('cmdInput').value); $('cmdInput').value = ''; } });
-  $('stopBtn').onclick = () => { generation++; speechSynthesis.cancel(); stopListen(); busy = false; setState(live ? 'idle' : 'sleepy'); };
-  const obs = new MutationObserver(() => $('stopBtn').classList.toggle('hidden', !(busy || speechSynthesis.speaking)));
+  $('stopBtn').onclick = () => { generation++; if (api && api.cancel) api.cancel(); speechSynthesis.cancel(); stopListen(); busy = false; setState(live ? 'idle' : 'sleepy'); };
   setInterval(() => $('stopBtn').classList.toggle('hidden', !(busy || speechSynthesis.speaking)), 300);
 
   document.querySelectorAll('.chip').forEach(ch => ch.onclick = () => sendCommand(ch.dataset.cmd));

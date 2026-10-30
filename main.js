@@ -19,6 +19,14 @@ const DEFAULTS = {
   overlayPos: null,
 };
 
+// One mascot per machine: a second launch focuses the running instance instead
+// of spawning a rival overlay + voice watcher fighting over the same state files.
+// Skipped under VIKTOR_DATA_DIR so headless test runs can coexist.
+if (!process.env.VIKTOR_DATA_DIR && !app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
 let overlayWin = null;
 let consoleWin = null;
 let config = { ...DEFAULTS };
@@ -46,18 +54,25 @@ function createOverlay() {
     overlayWin.setPosition(d.width - 220, d.height - 260);
   }
   overlayWin.loadFile('overlay.html');
+  let moveSaveTimer = null;
   overlayWin.on('moved', () => {
     if (!overlayWin) return;
-    const [x, y] = overlayWin.getPosition();
-    saveConfig({ overlayPos: { x, y } });
+    clearTimeout(moveSaveTimer);   // dragging fires 'moved' constantly; persist once it settles
+    moveSaveTimer = setTimeout(() => {
+      if (!overlayWin) return;
+      const [x, y] = overlayWin.getPosition();
+      saveConfig({ overlayPos: { x, y } });
+    }, 400);
   });
   overlayWin.on('closed', () => { overlayWin = null; });
 }
 
 function createConsole() {
   if (consoleWin) { consoleWin.show(); consoleWin.focus(); return; }
+  const wa = screen.getPrimaryDisplay().workArea;   // clamp: 1600x1000 overflows a 1366x768 laptop
   consoleWin = new BrowserWindow({
-    width: 1600, height: 1000, minWidth: 1200, minHeight: 760,
+    width: Math.min(1600, wa.width), height: Math.min(1000, wa.height),
+    minWidth: Math.min(1200, wa.width), minHeight: Math.min(760, wa.height),
     backgroundColor: '#0b0b0d', show: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true },
   });
@@ -91,9 +106,16 @@ const VOICE_OVERLAY_MAP = { wake: 'listening', listen: 'listening', think: 'work
 
 function voiceMicOn() { return voiceState !== 'off'; }
 
+function voiceScriptPath() {
+  if (process.env.VIKTOR_VOICE_SCRIPT) return process.env.VIKTOR_VOICE_SCRIPT;
+  // Packaged builds ship voice/ as extraResources: Python cannot read inside an asar.
+  if (app.isPackaged) return path.join(process.resourcesPath, 'voice', 'viktor_voice.py');
+  return path.join(__dirname, 'voice', 'viktor_voice.py');
+}
+
 function spawnVoice() {
   if (voiceProc && !voiceProc.killed) return true;
-  const script = process.env.VIKTOR_VOICE_SCRIPT || path.join(__dirname, 'voice', 'viktor_voice.py');
+  const script = voiceScriptPath();
   const candidates = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
   const tryNext = (i) => {
     if (i >= candidates.length) { voiceProc = null; voiceError = 'no-python'; return; }
@@ -187,18 +209,35 @@ ipcMain.handle('hermes-models', async () => {
   return res.json();
 });
 
+const chatAborts = new Map();   // sender id -> AbortController for the in-flight stream
+ipcMain.handle('hermes-cancel', (event) => {
+  const c = chatAborts.get(event.sender.id);
+  if (c) c.abort();
+});
+
 ipcMain.handle('hermes-chat', async (event, messages) => {
   const url = config.endpoint.replace(/\/$/, '') + '/chat/completions';
-  const res = await net.fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + config.apiKey,
-      'Content-Type': 'application/json',
-      'X-Hermes-Session-Key': config.sessionKey,
-    },
-    body: JSON.stringify({ model: config.modelName || 'hermes-agent', messages, stream: true }),
-  });
+  const abort = new AbortController();
+  chatAborts.set(event.sender.id, abort);
+  let res;
+  try {
+    res = await net.fetch(url, {
+      method: 'POST',
+      signal: abort.signal,
+      headers: {
+        Authorization: 'Bearer ' + config.apiKey,
+        'Content-Type': 'application/json',
+        'X-Hermes-Session-Key': config.sessionKey,
+      },
+      body: JSON.stringify({ model: config.modelName || 'hermes-agent', messages, stream: true }),
+    });
+  } catch (e) {
+    chatAborts.delete(event.sender.id);
+    if (abort.signal.aborted) return;   // user pressed STOP: end quietly, no error bubble
+    throw e;
+  }
   if (!res.ok || !res.body) {
+    chatAborts.delete(event.sender.id);
     const txt = await res.text().catch(() => '');
     throw new Error('HTTP ' + res.status + (txt ? ' - ' + txt.slice(0, 200) : ''));
   }
@@ -206,25 +245,32 @@ ipcMain.handle('hermes-chat', async (event, messages) => {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const line of lines) {
-      const t = line.trim();
-      if (!t.startsWith('data:')) continue;
-      const payload = t.slice(5).trim();
-      if (payload === '[DONE]') { wc.send('hermes-chunk', { done: true }); return; }
-      try {
-        const j = JSON.parse(payload);
-        const delta = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
-        if (delta) wc.send('hermes-chunk', { delta });
-        const fr = j.choices && j.choices[0] && j.choices[0].finish_reason;
-        if (fr === 'error' || fr === 'cancelled') wc.send('hermes-chunk', { failed: fr });
-      } catch { /* partial json, ignore */ }
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const payload = t.slice(5).trim();
+        if (payload === '[DONE]') { wc.send('hermes-chunk', { done: true }); return; }
+        try {
+          const j = JSON.parse(payload);
+          const delta = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
+          if (delta) wc.send('hermes-chunk', { delta });
+          const fr = j.choices && j.choices[0] && j.choices[0].finish_reason;
+          if (fr === 'error' || fr === 'cancelled') wc.send('hermes-chunk', { failed: fr });
+        } catch { /* partial json, ignore */ }
+      }
     }
+  } catch (e) {
+    if (abort.signal.aborted) return;   // STOP pressed mid-stream: end quietly
+    throw e;
+  } finally {
+    chatAborts.delete(event.sender.id);
   }
   wc.send('hermes-chunk', { done: true });
 });
